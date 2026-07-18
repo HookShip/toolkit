@@ -1,0 +1,38 @@
+{
+  "name": "@webhook-portal/signing",
+  "version": "0.1.0",
+  "description": "Standard Webhooks signing and verification wrapper.",
+  "keywords": [
+    "webhook",
+    "webhooks",
+    "standard-webhooks",
+    "hmac",
+    "signing"
+  ],
+  "license": "Apache-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "files": [
+    "dist"
+  ],
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "lint": "eslint src test",
+    "test": "vitest run",
+    "test:coverage": "node ../../scripts/test-coverage.mjs --project packages/signing",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc -p tsconfig.test.json"
+  }
+}

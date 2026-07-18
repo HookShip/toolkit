@@ -1,0 +1,154 @@
+{
+  "operations": [
+    {
+      "op": "select",
+      "paths": [
+        "/cloudEvent/datacontenttype",
+        "/cloudEvent/extensions/eventversion",
+        "/cloudEvent/extensions/webhookid",
+        "/cloudEvent/extensions/webhookversion",
+        "/cloudEvent/id",
+        "/cloudEvent/source",
+        "/cloudEvent/specversion",
+        "/cloudEvent/subject",
+        "/cloudEvent/time",
+        "/cloudEvent/type",
+        "/standardWebhook/eventType",
+        "/standardWebhook/eventVersion",
+        "/standardWebhook/id",
+        "/standardWebhook/source",
+        "/standardWebhook/subject",
+        "/standardWebhook/timestamp",
+        "/standardWebhook/version"
+      ]
+    },
+    {
+      "op": "set",
+      "path": "/specversion",
+      "value": "1.0"
+    },
+    {
+      "op": "set",
+      "path": "/extensions/envelopeVersion",
+      "value": "1.0"
+    },
+    {
+      "from": [
+        "/cloudEvent/specversion"
+      ],
+      "op": "coalesce",
+      "to": "/specversion"
+    },
+    {
+      "from": [
+        "/cloudEvent/id",
+        "/standardWebhook/id"
+      ],
+      "op": "coalesce",
+      "to": "/id"
+    },
+    {
+      "from": [
+        "/cloudEvent/source",
+        "/standardWebhook/source"
+      ],
+      "op": "coalesce",
+      "to": "/source"
+    },
+    {
+      "from": [
+        "/cloudEvent/type",
+        "/standardWebhook/eventType"
+      ],
+      "op": "coalesce",
+      "to": "/type"
+    },
+    {
+      "from": [
+        "/cloudEvent/subject",
+        "/standardWebhook/subject"
+      ],
+      "op": "coalesce",
+      "to": "/subject"
+    },
+    {
+      "from": [
+        "/cloudEvent/time",
+        "/standardWebhook/timestamp"
+      ],
+      "op": "coalesce",
+      "to": "/time"
+    },
+    {
+      "from": [
+        "/cloudEvent/datacontenttype"
+      ],
+      "op": "coalesce",
+      "to": "/datacontenttype"
+    },
+    {
+      "from": [
+        "/cloudEvent/id"
+      ],
+      "op": "coalesce",
+      "to": "/extensions/cloudEventId"
+    },
+    {
+      "from": [
+        "/cloudEvent/extensions/webhookid"
+      ],
+      "op": "coalesce",
+      "to": "/extensions/cloudEventWebhookId"
+    },
+    {
+      "from": [
+        "/standardWebhook/id"
+      ],
+      "op": "coalesce",
+      "to": "/extensions/standardWebhookId"
+    },
+    {
+      "from": [
+        "/cloudEvent/specversion"
+      ],
+      "op": "coalesce",
+      "to": "/extensions/cloudEventsSpecVersion"
+    },
+    {
+      "from": [
+        "/cloudEvent/extensions/webhookversion"
+      ],
+      "op": "coalesce",
+      "to": "/extensions/cloudEventWebhookVersion"
+    },
+    {
+      "from": [
+        "/standardWebhook/version"
+      ],
+      "op": "coalesce",
+      "to": "/extensions/webhookVersion"
+    },
+    {
+      "from": [
+        "/cloudEvent/extensions/eventversion"
+      ],
+      "op": "coalesce",
+      "to": "/extensions/cloudEventEventVersion"
+    },
+    {
+      "from": [
+        "/standardWebhook/eventVersion"
+      ],
+      "op": "coalesce",
+      "to": "/extensions/eventVersion"
+    },
+    {
+      "op": "drop",
+      "paths": [
+        "/cloudEvent",
+        "/standardWebhook"
+      ]
+    }
+  ],
+  "version": "1.0"
+}

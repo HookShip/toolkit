@@ -1,0 +1,4 @@
+subscriptionId={{subscriptionId}}
+endpointId={{endpointId}}
+eventTypes={{eventTypes}}
+contractVersion={{contractVersion}}

@@ -1,0 +1,29 @@
+{
+  "cloudEvent": {
+    "datacontenttype": "application/json",
+    "extensions": {
+      "eventversion": "2026-06-01",
+      "webhookid": "msg_cloud_extension",
+      "webhookversion": "v0"
+    },
+    "id": "ce_evt_01",
+    "source": "https://billing.example.test",
+    "specversion": "1.0",
+    "subject": "invoice/in_01",
+    "time": "2026-07-18T07:00:00.000Z",
+    "type": "billing.invoice.paid"
+  },
+  "payload": {
+    "authorization": "fixture-secret-never-emit",
+    "customerEmail": "private@example.test"
+  },
+  "standardWebhook": {
+    "eventType": "billing.invoice.paid",
+    "eventVersion": "2026-07-01",
+    "id": "msg_std_01",
+    "source": "com.example.billing",
+    "subject": "invoice/in_01",
+    "timestamp": "2026-07-18T07:00:00.000Z",
+    "version": "v1"
+  }
+}

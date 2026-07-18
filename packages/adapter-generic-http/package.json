@@ -1,0 +1,42 @@
+{
+  "name": "@webhook-portal/adapter-generic-http",
+  "version": "0.1.0",
+  "description": "Generic HTTP control and metadata adapter.",
+  "keywords": [
+    "webhook",
+    "webhooks",
+    "adapter",
+    "http"
+  ],
+  "license": "Apache-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "files": [
+    "dist"
+  ],
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "lint": "eslint src",
+    "test": "vitest run",
+    "test:coverage": "node ../../scripts/test-coverage.mjs --project packages/adapter-generic-http",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@webhook-portal/adapter-sdk": "workspace:*",
+    "@webhook-portal/canonical-model": "workspace:*",
+    "@webhook-portal/signing": "workspace:*"
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "declarationVersion": "1.0",
+  "suite": "@webhook-portal/extension-conformance",
+  "suiteVersion": "0.1.0",
+  "expectedKind": "template",
+  "platformVersion": "0.1.0",
+  "sdkVersion": "0.1.0",
+  "requiredCaseIds": [
+    "manifest.closed-versioned",
+    "bundle.integrity-trust",
+    "permissions.no-escalation",
+    "runtime.declarative-only",
+    "compatibility.resolvable",
+    "determinism.reproducible",
+    "malicious-corpus.closed-failures"
+  ],
+  "customChecks": [
+    "tamper-rejection",
+    "fixture-output",
+    "closed-contract-schema",
+    "no-secret-or-payload-leakage",
+    "permission-minimality",
+    "no-domain-promises"
+  ],
+  "fixtures": [
+    {
+      "input": "fixtures/template-variables.json",
+      "expectedOutput": "fixtures/endpoint-config.expected.txt",
+      "template": "endpoint-config"
+    },
+    {
+      "input": "fixtures/template-variables.json",
+      "expectedOutput": "fixtures/subscription-config.expected.txt",
+      "template": "subscription-config"
+    }
+  ]
+}

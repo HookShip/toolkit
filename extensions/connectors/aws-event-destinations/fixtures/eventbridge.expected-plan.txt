@@ -1,0 +1,8 @@
+kind=eventbridge
+region=us-east-1
+account=123456789012
+target=arn:aws:events:us-east-1:123456789012:event-bus/webhook-events
+roleReference=test-role/aws-eventbridge-publisher
+source=com.example.billing
+detailType=billing.invoice.paid
+hostMode=host-managed-aws-api

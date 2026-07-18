@@ -1,0 +1,86 @@
+{
+  "manifestVersion": "1.0",
+  "kind": "policy",
+  "identity": {
+    "id": "webhook-portal.policy.metadata-protection-baseline",
+    "name": "Metadata protection baseline",
+    "version": "0.1.0",
+    "publisher": {
+      "id": "webhook-portal.first-party-development",
+      "name": "Webhook Portal first-party development assets",
+      "url": "https://github.com/josedab/webhook-ideas"
+    }
+  },
+  "compatibility": {
+    "platform": "^0.1.0",
+    "sdk": "^0.1.0",
+    "dependencies": [],
+    "conflicts": []
+  },
+  "capabilities": ["policy.declarative"],
+  "permissions": {
+    "metadataRead": [
+      "/body",
+      "/credentials",
+      "/endpoint/id",
+      "/event/id",
+      "/event/type",
+      "/event/version",
+      "/headers/authorization",
+      "/headers/cookie",
+      "/headers/set-cookie",
+      "/headers/x-api-key",
+      "/headers/x-forwarded-for",
+      "/payload"
+    ],
+    "metadataWrite": [
+      "/body",
+      "/credentials",
+      "/headers/authorization",
+      "/headers/cookie",
+      "/headers/set-cookie",
+      "/headers/x-api-key",
+      "/headers/x-forwarded-for",
+      "/payload"
+    ]
+  },
+  "resources": [
+    {
+      "path": "metadata-baseline.policy",
+      "mediaType": "application/json"
+    },
+    {
+      "path": "retention-recommendations.data",
+      "mediaType": "application/json"
+    }
+  ],
+  "entry": {
+    "type": "policy",
+    "program": "metadata-baseline.policy"
+  },
+  "provenance": {
+    "source": {
+      "repository": "https://github.com/josedab/webhook-ideas",
+      "revision": "extension-seed-packs-v0.1.0"
+    },
+    "build": {
+      "builder": "webhook-portal-extension-seed-builder",
+      "buildType": "data-only-source-pack",
+      "timestamp": "2026-07-18T00:00:00.000Z",
+      "reproducible": true
+    },
+    "sbom": {
+      "format": "webhook-portal-sbom-v1",
+      "dependencies": [
+        {
+          "name": "webhook-portal-extension-sdk",
+          "version": "0.1.0",
+          "relationship": "build",
+          "direct": true,
+          "license": "Apache-2.0",
+          "purl": "pkg:npm/%40webhook-portal/extension-sdk@0.1.0"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,4 @@
+subscriptionId=subscription_ai_jobs
+endpointId=endpoint_ai_callbacks
+eventTypes=ai.job.completed,ai.job.failed,ai.job.progress
+contractVersion=1.0

@@ -1,0 +1,38 @@
+openapi: 3.1.0
+info:
+  title: Orders webhooks
+  version: 1.0.0
+components:
+  schemas:
+    OrderCreated:
+      type: object
+      additionalProperties: false
+      required: [id, status]
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+          enum: [created, paid]
+webhooks:
+  order.created:
+    post:
+      summary: Order created
+      description: Sent when an order is accepted.
+      x-event-type: order.created
+      x-event-version: "1"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrderCreated"
+            examples:
+              default:
+                summary: Example order
+                value:
+                  id: ord_123
+                  status: created
+      responses:
+        "204":
+          description: Accepted

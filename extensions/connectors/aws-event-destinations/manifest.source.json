@@ -1,0 +1,66 @@
+{
+  "manifestVersion": "1.0",
+  "kind": "connector",
+  "identity": {
+    "id": "webhook-portal.connector.aws-event-destinations",
+    "name": "AWS event destination configuration",
+    "version": "0.1.0",
+    "publisher": {
+      "id": "webhook-portal.first-party-development",
+      "name": "Webhook Portal first-party development assets",
+      "url": "https://github.com/josedab/webhook-ideas"
+    }
+  },
+  "compatibility": {
+    "platform": "^0.1.0",
+    "sdk": "^0.1.0",
+    "dependencies": [],
+    "conflicts": []
+  },
+  "capabilities": ["connector.configuration", "connector.templates"],
+  "permissions": {},
+  "resources": [
+    {
+      "path": "configuration.schema",
+      "mediaType": "application/schema+json"
+    },
+    {
+      "path": "destination-plan.template",
+      "mediaType": "text/x-webhook-template"
+    },
+    {
+      "path": "host-cloud-notes.md",
+      "mediaType": "text/markdown"
+    }
+  ],
+  "entry": {
+    "type": "connector",
+    "configurationSchema": "configuration.schema",
+    "templates": ["destination-plan.template", "host-cloud-notes.md"]
+  },
+  "provenance": {
+    "source": {
+      "repository": "https://github.com/josedab/webhook-ideas",
+      "revision": "extension-seed-packs-v0.1.0"
+    },
+    "build": {
+      "builder": "webhook-portal-extension-seed-builder",
+      "buildType": "data-only-source-pack",
+      "timestamp": "2026-07-18T00:00:00.000Z",
+      "reproducible": true
+    },
+    "sbom": {
+      "format": "webhook-portal-sbom-v1",
+      "dependencies": [
+        {
+          "name": "webhook-portal-extension-sdk",
+          "version": "0.1.0",
+          "relationship": "build",
+          "direct": true,
+          "license": "Apache-2.0",
+          "purl": "pkg:npm/%40webhook-portal/extension-sdk@0.1.0"
+        }
+      ]
+    }
+  }
+}

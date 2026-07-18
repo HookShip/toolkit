@@ -1,0 +1,142 @@
+{
+  "decision": "deny",
+  "findings": [
+    {
+      "classification": "internal",
+      "code": "field_classified",
+      "path": "/event/id",
+      "ruleIndex": 3,
+      "severity": "info",
+      "target": "metadata"
+    },
+    {
+      "classification": "internal",
+      "code": "field_classified",
+      "path": "/endpoint/id",
+      "ruleIndex": 4,
+      "severity": "info",
+      "target": "metadata"
+    },
+    {
+      "code": "field_denied",
+      "path": "/credentials",
+      "ruleIndex": 5,
+      "severity": "error",
+      "target": "metadata"
+    },
+    {
+      "code": "field_redacted",
+      "path": "/credentials",
+      "ruleIndex": 6,
+      "severity": "info",
+      "target": "metadata"
+    },
+    {
+      "code": "field_denied",
+      "path": "/headers/authorization",
+      "ruleIndex": 7,
+      "severity": "error",
+      "target": "metadata"
+    },
+    {
+      "code": "field_redacted",
+      "path": "/headers/authorization",
+      "ruleIndex": 8,
+      "severity": "info",
+      "target": "metadata"
+    },
+    {
+      "code": "field_redacted",
+      "path": "/headers/cookie",
+      "ruleIndex": 9,
+      "severity": "info",
+      "target": "metadata"
+    },
+    {
+      "code": "field_redacted",
+      "path": "/headers/set-cookie",
+      "ruleIndex": 10,
+      "severity": "info",
+      "target": "metadata"
+    },
+    {
+      "classification": "restricted",
+      "code": "field_classified",
+      "path": "/headers/x-api-key",
+      "ruleIndex": 11,
+      "severity": "info",
+      "target": "metadata"
+    },
+    {
+      "code": "field_hashed",
+      "path": "/headers/x-api-key",
+      "ruleIndex": 12,
+      "severity": "info",
+      "target": "metadata"
+    },
+    {
+      "classification": "personal",
+      "code": "field_classified",
+      "path": "/headers/x-forwarded-for",
+      "ruleIndex": 13,
+      "severity": "info",
+      "target": "metadata"
+    },
+    {
+      "code": "field_hashed",
+      "path": "/headers/x-forwarded-for",
+      "ruleIndex": 14,
+      "severity": "info",
+      "target": "metadata"
+    },
+    {
+      "code": "field_denied",
+      "path": "/payload",
+      "ruleIndex": 15,
+      "severity": "error",
+      "target": "metadata"
+    },
+    {
+      "code": "field_redacted",
+      "path": "/payload",
+      "ruleIndex": 16,
+      "severity": "info",
+      "target": "metadata"
+    },
+    {
+      "code": "field_denied",
+      "path": "/body",
+      "ruleIndex": 17,
+      "severity": "error",
+      "target": "metadata"
+    },
+    {
+      "code": "field_redacted",
+      "path": "/body",
+      "ruleIndex": 18,
+      "severity": "info",
+      "target": "metadata"
+    }
+  ],
+  "metadata": {
+    "body": "[BODY REMOVED]",
+    "credentials": "[CREDENTIALS REMOVED]",
+    "endpoint": {
+      "id": "ep_01"
+    },
+    "event": {
+      "id": "evt_01",
+      "type": "billing.invoice.paid",
+      "version": "2026-07-01"
+    },
+    "headers": {
+      "authorization": "[AUTHORIZATION REMOVED]",
+      "cookie": "[COOKIE REMOVED]",
+      "set-cookie": "[SET-COOKIE REMOVED]",
+      "x-api-key": "sha256:41f77d40556e09e13d63432ea254020420b4de4253dfba3f270dc743066b8bdf",
+      "x-forwarded-for": "sha256:a228fd8cf9faa4fccea09b1ba52e45e4bd05255ccdf4ec62fca876e9db2018c9"
+    },
+    "payload": "[PAYLOAD REMOVED]",
+    "receivedAt": "2026-07-18T07:00:00.000Z"
+  }
+}

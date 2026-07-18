@@ -1,0 +1,4 @@
+endpointId=endpoint_ai_callbacks
+endpointUrl=https://consumer.example.test/webhooks/ai
+signingSecretReference=secret-ref/ai-callback-signing
+retryProfile=bounded-exponential

@@ -1,0 +1,78 @@
+{
+  "manifestVersion": "1.0",
+  "kind": "transform",
+  "identity": {
+    "id": "webhook-portal.transform.canonical-metadata-envelope",
+    "name": "Canonical webhook metadata envelope",
+    "version": "0.1.0",
+    "publisher": {
+      "id": "webhook-portal.first-party-development",
+      "name": "Webhook Portal first-party development assets",
+      "url": "https://github.com/josedab/webhook-ideas"
+    }
+  },
+  "compatibility": {
+    "platform": "^0.1.0",
+    "sdk": "^0.1.0",
+    "dependencies": [],
+    "conflicts": []
+  },
+  "capabilities": ["transform.declarative"],
+  "permissions": {
+    "payloadRead": [
+      "/cloudEvent/datacontenttype",
+      "/cloudEvent/extensions/eventversion",
+      "/cloudEvent/extensions/webhookid",
+      "/cloudEvent/extensions/webhookversion",
+      "/cloudEvent/id",
+      "/cloudEvent/source",
+      "/cloudEvent/specversion",
+      "/cloudEvent/subject",
+      "/cloudEvent/time",
+      "/cloudEvent/type",
+      "/standardWebhook/eventType",
+      "/standardWebhook/eventVersion",
+      "/standardWebhook/id",
+      "/standardWebhook/source",
+      "/standardWebhook/subject",
+      "/standardWebhook/timestamp",
+      "/standardWebhook/version"
+    ],
+    "payloadWrite": ["*"]
+  },
+  "resources": [
+    {
+      "path": "canonical-metadata.transform",
+      "mediaType": "application/json"
+    }
+  ],
+  "entry": {
+    "type": "transform",
+    "program": "canonical-metadata.transform"
+  },
+  "provenance": {
+    "source": {
+      "repository": "https://github.com/josedab/webhook-ideas",
+      "revision": "extension-seed-packs-v0.1.0"
+    },
+    "build": {
+      "builder": "webhook-portal-extension-seed-builder",
+      "buildType": "data-only-source-pack",
+      "timestamp": "2026-07-18T00:00:00.000Z",
+      "reproducible": true
+    },
+    "sbom": {
+      "format": "webhook-portal-sbom-v1",
+      "dependencies": [
+        {
+          "name": "webhook-portal-extension-sdk",
+          "version": "0.1.0",
+          "relationship": "build",
+          "direct": true,
+          "license": "Apache-2.0",
+          "purl": "pkg:npm/%40webhook-portal/extension-sdk@0.1.0"
+        }
+      ]
+    }
+  }
+}

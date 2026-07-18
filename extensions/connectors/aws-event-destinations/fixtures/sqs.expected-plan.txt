@@ -1,0 +1,8 @@
+kind=sqs
+region=us-east-1
+account=123456789012
+target=https://sqs.us-east-1.amazonaws.com/123456789012/webhook-events
+roleReference=test-role/aws-sqs-publisher
+source=com.example.ai
+detailType=ai.job.completed
+hostMode=host-managed-aws-api

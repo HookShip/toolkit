@@ -1,0 +1,1 @@
+{"eventId":"evt_ai_01","eventType":"ai.job.completed","eventVersion":"1.0","job":{"id":"job_01","resultReference":"https://api.example.test/results/job_01","status":"completed"},"occurredAt":"2026-07-18T07:00:00.000Z"}

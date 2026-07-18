@@ -1,0 +1,13 @@
+{
+  "name": "@webhook-portal/first-party-extension-packs",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Reviewed data-only connector, transform, policy, and template extension source packs.",
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build-sign.mjs",
+    "build:check": "node scripts/build-sign.mjs --check",
+    "test": "node --test test/seed-packs.test.mjs",
+    "validate": "npm run build:check && npm test"
+  }
+}

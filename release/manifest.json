@@ -1,0 +1,99 @@
+{
+  "schemaVersion": 1,
+  "releaseStatus": "unreleased",
+  "openPackages": [
+    {
+      "name": "@webhook-portal/canonical-model",
+      "path": "packages/canonical-model",
+      "version": "0.1.0"
+    },
+    {
+      "name": "@webhook-portal/contract-core",
+      "path": "packages/contract-core",
+      "version": "0.1.0"
+    },
+    {
+      "name": "@webhook-portal/signing",
+      "path": "packages/signing",
+      "version": "0.1.0"
+    },
+    {
+      "name": "@webhook-portal/adapter-sdk",
+      "path": "packages/adapter-sdk",
+      "version": "0.1.0"
+    },
+    {
+      "name": "@webhook-portal/adapter-conformance",
+      "path": "packages/adapter-conformance",
+      "version": "0.1.0"
+    },
+    {
+      "name": "@webhook-portal/adapter-generic-http",
+      "path": "packages/adapter-generic-http",
+      "version": "0.1.0"
+    },
+    {
+      "name": "@webhook-portal/extension-sdk",
+      "path": "packages/extension-sdk",
+      "version": "0.1.0"
+    },
+    {
+      "name": "@webhook-portal/extension-conformance",
+      "path": "packages/extension-conformance",
+      "version": "0.1.0"
+    },
+    {
+      "name": "@webhook-portal/cli",
+      "path": "packages/cli",
+      "version": "0.1.0"
+    }
+  ],
+  "deferredOpenPackages": [
+    {
+      "name": "@webhook-portal/portal-components",
+      "path": "packages/portal-components",
+      "reason": "Held outside the first coordinated package cohort until its separate React compatibility and accessibility release evidence is accepted."
+    }
+  ],
+  "privateImages": [
+    {
+      "name": "control-plane-api",
+      "packagePath": "apps/control-plane-api",
+      "dockerfile": "infra/managed/Dockerfile.api",
+      "version": "0.0.0",
+      "status": "engineering-pilot-only",
+      "digest": null,
+      "ociLabels": {
+        "org.opencontainers.image.version": "0.0.0",
+        "org.opencontainers.image.revision": "source-revision-required",
+        "org.opencontainers.image.licenses": "UNLICENSED"
+      }
+    },
+    {
+      "name": "worker",
+      "packagePath": "apps/worker",
+      "dockerfile": "infra/managed/Dockerfile.worker",
+      "version": "0.0.0",
+      "status": "engineering-pilot-only",
+      "digest": null,
+      "ociLabels": {
+        "org.opencontainers.image.version": "0.0.0",
+        "org.opencontainers.image.revision": "source-revision-required",
+        "org.opencontainers.image.licenses": "UNLICENSED"
+      }
+    },
+    {
+      "name": "portal",
+      "packagePath": "apps/portal-web",
+      "dockerfile": "infra/managed/Dockerfile.portal",
+      "version": "0.0.0",
+      "status": "engineering-pilot-only",
+      "digest": null,
+      "ociLabels": {
+        "org.opencontainers.image.version": "0.0.0",
+        "org.opencontainers.image.revision": "source-revision-required",
+        "org.opencontainers.image.licenses": "UNLICENSED"
+      }
+    }
+  ]
+}

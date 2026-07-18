@@ -1,0 +1,4 @@
+endpointId={{endpointId}}
+endpointUrl={{endpointUrl}}
+signingSecretReference={{signingSecretReference}}
+retryProfile={{retryProfile}}

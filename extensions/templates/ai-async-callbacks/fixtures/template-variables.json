@@ -1,0 +1,9 @@
+{
+  "contractVersion": "1.0",
+  "endpointId": "endpoint_ai_callbacks",
+  "endpointUrl": "https://consumer.example.test/webhooks/ai",
+  "eventTypes": "ai.job.completed,ai.job.failed,ai.job.progress",
+  "retryProfile": "bounded-exponential",
+  "signingSecretReference": "secret-ref/ai-callback-signing",
+  "subscriptionId": "subscription_ai_jobs"
+}

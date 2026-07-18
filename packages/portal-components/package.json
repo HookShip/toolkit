@@ -1,0 +1,108 @@
+{
+  "name": "@webhook-portal/portal-components",
+  "version": "0.1.0",
+  "description": "Accessible, headless React components for producer and consumer webhook portals.",
+  "keywords": [
+    "webhook",
+    "portal",
+    "react",
+    "headless",
+    "accessibility",
+    "developer-tools"
+  ],
+  "license": "Apache-2.0",
+  "type": "module",
+  "sideEffects": [
+    "./styles/*.css"
+  ],
+  "files": [
+    "dist",
+    "styles",
+    "README.md",
+    "LICENSE"
+  ],
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./provider": {
+      "types": "./dist/provider.d.ts",
+      "import": "./dist/provider.js"
+    },
+    "./shell": {
+      "types": "./dist/shell.d.ts",
+      "import": "./dist/shell.js"
+    },
+    "./primitives": {
+      "types": "./dist/primitives.d.ts",
+      "import": "./dist/primitives.js"
+    },
+    "./events": {
+      "types": "./dist/events.d.ts",
+      "import": "./dist/events.js"
+    },
+    "./endpoints": {
+      "types": "./dist/endpoints.d.ts",
+      "import": "./dist/endpoints.js"
+    },
+    "./secrets": {
+      "types": "./dist/secrets.d.ts",
+      "import": "./dist/secrets.js"
+    },
+    "./deliveries": {
+      "types": "./dist/deliveries.d.ts",
+      "import": "./dist/deliveries.js"
+    },
+    "./states": {
+      "types": "./dist/states.d.ts",
+      "import": "./dist/states.js"
+    },
+    "./session": {
+      "types": "./dist/session.d.ts",
+      "import": "./dist/session.js"
+    },
+    "./client/copy-button": {
+      "types": "./dist/client/copy-button.d.ts",
+      "import": "./dist/client/copy-button.js"
+    },
+    "./client/secret-reveal": {
+      "types": "./dist/client/secret-reveal.d.ts",
+      "import": "./dist/client/secret-reveal.js"
+    },
+    "./client/tabs": {
+      "types": "./dist/client/tabs.d.ts",
+      "import": "./dist/client/tabs.js"
+    },
+    "./styles.css": "./styles/portal.css",
+    "./package.json": "./package.json"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "lint": "eslint src test scripts",
+    "pack:smoke": "pnpm build && node scripts/pack-smoke.mjs",
+    "test": "vitest run",
+    "test:coverage": "node ../../scripts/test-coverage.mjs --project packages/portal-components",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test.json"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "jsdom": "^29.1.1",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7"
+  },
+  "peerDependencies": {
+    "react": ">=18.3 <20",
+    "react-dom": ">=18.3 <20"
+  }
+}

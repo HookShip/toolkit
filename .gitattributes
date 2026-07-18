@@ -1,0 +1,9 @@
+# Normalize line endings to LF for everyone, regardless of platform or
+# per-user Git autocrlf settings, matching .editorconfig.
+* text=auto eol=lf
+
+# Binary/opaque fixtures: never diff, never line-ending-normalize.
+*.pem -text
+*.p12 -text
+*.crt -text
+*.key -text

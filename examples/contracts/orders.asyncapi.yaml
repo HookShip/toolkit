@@ -1,0 +1,26 @@
+asyncapi: 2.6.0
+info:
+  title: Orders webhooks
+  version: 1.0.0
+channels:
+  orders:
+    subscribe:
+      message:
+        name: order.created
+        title: Order created
+        x-event-version: "1"
+        payload:
+          type: object
+          additionalProperties: false
+          required: [id, status]
+          properties:
+            id:
+              type: string
+            status:
+              type: string
+              enum: [created, paid]
+        examples:
+          - name: default
+            payload:
+              id: ord_123
+              status: created

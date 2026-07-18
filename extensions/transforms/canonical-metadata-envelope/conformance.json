@@ -1,0 +1,30 @@
+{
+  "declarationVersion": "1.0",
+  "suite": "@webhook-portal/extension-conformance",
+  "suiteVersion": "0.1.0",
+  "expectedKind": "transform",
+  "platformVersion": "0.1.0",
+  "sdkVersion": "0.1.0",
+  "requiredCaseIds": [
+    "manifest.closed-versioned",
+    "bundle.integrity-trust",
+    "permissions.no-escalation",
+    "runtime.declarative-only",
+    "compatibility.resolvable",
+    "determinism.reproducible",
+    "malicious-corpus.closed-failures"
+  ],
+  "customChecks": [
+    "tamper-rejection",
+    "fixture-output",
+    "no-payload-leakage",
+    "id-version-preservation",
+    "permission-minimality"
+  ],
+  "fixtures": [
+    {
+      "input": "fixtures/input.json",
+      "expectedOutput": "fixtures/expected-output.json"
+    }
+  ]
+}

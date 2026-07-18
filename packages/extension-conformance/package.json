@@ -1,0 +1,53 @@
+{
+  "name": "@webhook-portal/extension-conformance",
+  "version": "0.1.0",
+  "description": "Framework-neutral conformance harness for signed, data-only Webhook Portal extensions.",
+  "keywords": [
+    "webhook",
+    "webhooks",
+    "extension",
+    "conformance",
+    "testing"
+  ],
+  "license": "Apache-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "files": [
+    "dist"
+  ],
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./malicious-corpus": {
+      "types": "./dist/malicious-corpus.d.ts",
+      "import": "./dist/malicious-corpus.js"
+    },
+    "./runner": {
+      "types": "./dist/runner.d.ts",
+      "import": "./dist/runner.js"
+    },
+    "./suite": {
+      "types": "./dist/suite.d.ts",
+      "import": "./dist/suite.js"
+    }
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "lint": "eslint src test",
+    "test": "vitest run",
+    "test:coverage": "node ../../scripts/test-coverage.mjs --project packages/extension-conformance",
+    "typecheck": "tsc -p tsconfig.test.json"
+  },
+  "dependencies": {
+    "@webhook-portal/extension-sdk": "workspace:*"
+  }
+}

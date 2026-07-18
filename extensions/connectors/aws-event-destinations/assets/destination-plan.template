@@ -1,0 +1,8 @@
+kind={{destinationKind}}
+region={{region}}
+account={{accountId}}
+target={{target}}
+roleReference={{roleReference}}
+source={{source}}
+detailType={{detailType}}
+hostMode={{hostMode}}

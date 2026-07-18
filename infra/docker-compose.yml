@@ -1,0 +1,169 @@
+name: webhook-portal-local
+
+x-reference-environment: &reference-environment
+  DATABASE_URL: ${DATABASE_URL:?Run ./infra/setup.sh}
+  REFERENCE_MASTER_KEY: ${REFERENCE_MASTER_KEY:?Run ./infra/setup.sh}
+  REFERENCE_INGEST_SECRET: ${REFERENCE_INGEST_SECRET:?Run ./infra/setup.sh}
+  REFERENCE_INGEST_CREDENTIAL_ID:
+    ${REFERENCE_INGEST_CREDENTIAL_ID:?Run ./infra/setup.sh}
+  REFERENCE_PAYLOAD_NAMESPACE_ID:
+    ${REFERENCE_PAYLOAD_NAMESPACE_ID:?Run ./infra/setup.sh}
+  REFERENCE_PAYLOAD_STORE_ID:
+    ${REFERENCE_PAYLOAD_STORE_ID:?Run ./infra/setup.sh}
+  REFERENCE_API_TOKEN_FILE: /run/secrets/reference-api-token
+  REFERENCE_TLS_CERT_FILE: /run/tls/reference.crt
+  REFERENCE_TLS_KEY_FILE: /run/tls/reference.key
+  REFERENCE_HOST: 0.0.0.0
+  REFERENCE_PORT: 3210
+  REFERENCE_ALLOW_LOCAL_NETWORK: ${REFERENCE_ALLOW_LOCAL_NETWORK:-false}
+  REFERENCE_AUTO_MIGRATE: "false"
+  REFERENCE_PAYLOAD_RETENTION: ${REFERENCE_PAYLOAD_RETENTION:-false}
+  REFERENCE_PAYLOAD_TTL_SECONDS: ${REFERENCE_PAYLOAD_TTL_SECONDS:-86400}
+  REFERENCE_PAYLOAD_MAINTENANCE_BATCH_SIZE: ${REFERENCE_PAYLOAD_MAINTENANCE_BATCH_SIZE:-100}
+  REFERENCE_PAYLOAD_MAINTENANCE_GRACE_SECONDS: ${REFERENCE_PAYLOAD_MAINTENANCE_GRACE_SECONDS:-300}
+  REFERENCE_PAYLOAD_MAINTENANCE_INTERVAL_SECONDS: ${REFERENCE_PAYLOAD_MAINTENANCE_INTERVAL_SECONDS:-60}
+  NODE_EXTRA_CA_CERTS: /run/tls/ca.crt
+  MINIO_ENDPOINT: minio
+  MINIO_PORT: 9000
+  MINIO_USE_SSL: "false"
+  MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:?Run ./infra/setup.sh}
+  MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:?Run ./infra/setup.sh}
+  MINIO_PAYLOAD_BUCKET:
+    ${MINIO_PAYLOAD_BUCKET:?Run ./infra/setup.sh for the canonical
+    namespace/store bucket}
+
+services:
+  postgres:
+    image: postgres:17.5-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?Run ./infra/setup.sh}
+      POSTGRES_USER: ${POSTGRES_USER:?Run ./infra/setup.sh}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Run ./infra/setup.sh}
+    volumes:
+      - webhook-postgres-data:/var/lib/postgresql/data
+    networks:
+      - reference-backend
+    healthcheck:
+      test:
+        ["CMD-SHELL", 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 5s
+    restart: unless-stopped
+
+  minio:
+    image: quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z
+    command: server /data --address ":9000"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:?Run ./infra/setup.sh}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:?Run ./infra/setup.sh}
+    volumes:
+      - webhook-minio-data:/data
+    networks:
+      - reference-backend
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "curl",
+          "--fail",
+          "--silent",
+          "http://127.0.0.1:9000/minio/health/live",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 5s
+    restart: unless-stopped
+
+  migration:
+    image: webhook-portal-reference:local
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile
+      target: runtime
+    command: ["node", "dist/migrate.js"]
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?Run ./infra/setup.sh}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - reference-backend
+    restart: "no"
+
+  app:
+    image: webhook-portal-reference:local
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile
+      target: runtime
+    user: "${REFERENCE_UID:-1000}:${REFERENCE_GID:-1000}"
+    environment: *reference-environment
+    depends_on:
+      migration:
+        condition: service_completed_successfully
+      minio:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${REFERENCE_PORT:-3210}:3210"
+    volumes:
+      - ./.api-token:/run/secrets/reference-api-token:ro
+      - ./certs/ca.crt:/run/tls/ca.crt:ro
+      - ./certs/reference.crt:/run/tls/reference.crt:ro
+      - ./certs/reference.key:/run/tls/reference.key:ro
+    networks:
+      - reference-backend
+      - reference-egress
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "const
+          fs=require('fs'),https=require('https');https.get({hostname:'localhost',port:3210,path:'/health/ready',ca:fs.readFileSync('/run/tls/ca.crt'),servername:'localhost'},r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+    restart: unless-stopped
+
+  integration-tests:
+    profiles:
+      - integration
+    image: webhook-portal-reference-build:local
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile
+      target: integration-test
+    command: ["pnpm", "test:integration:reference"]
+    environment:
+      TEST_DATABASE_URL:
+        postgresql://${POSTGRES_USER:?Run
+        ./infra/setup.sh}:${POSTGRES_PASSWORD:?Run
+        ./infra/setup.sh}@postgres:5432/${POSTGRES_DB:?Run ./infra/setup.sh}
+      TEST_MINIO_ENDPOINT: minio
+      TEST_MINIO_PORT: 9000
+      TEST_MINIO_USE_SSL: "false"
+      TEST_MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:?Run ./infra/setup.sh}
+      TEST_MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:?Run ./infra/setup.sh}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    networks:
+      - reference-backend
+
+volumes:
+  webhook-postgres-data:
+  webhook-minio-data:
+
+networks:
+  reference-backend:
+    internal: true
+  reference-egress:
+    internal: false

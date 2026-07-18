@@ -1,0 +1,22 @@
+{
+  "attempt": 1,
+  "deliveryId": "demo_external_delivery_1",
+  "endpointId": "demo_external_endpoint",
+  "eventId": "evt_demo_1",
+  "eventVersion": {
+    "eventType": "order.created",
+    "schemaChecksum": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "version": "1"
+  },
+  "kind": "delivery_attempt",
+  "mappingVersion": {
+    "name": "webhook-portal.canonical",
+    "schemaVersion": "2026-07-01",
+    "version": "1.0.0"
+  },
+  "occurredAt": "2026-07-16T00:00:00.000Z",
+  "schemaVersion": "2026-07-01",
+  "sequence": 1,
+  "status": "delivered",
+  "responseStatusCode": 204
+}

@@ -1,0 +1,29 @@
+{
+  "metadata": {
+    "body": {
+      "card": "fixture-secret-never-emit"
+    },
+    "credentials": {
+      "apiKey": "fixture-secret-never-emit"
+    },
+    "endpoint": {
+      "id": "ep_01"
+    },
+    "event": {
+      "id": "evt_01",
+      "type": "billing.invoice.paid",
+      "version": "2026-07-01"
+    },
+    "headers": {
+      "authorization": "Bearer fixture-secret-never-emit",
+      "cookie": "session=fixture-secret-never-emit",
+      "set-cookie": "session=fixture-secret-never-emit",
+      "x-api-key": "fixture-secret-never-emit",
+      "x-forwarded-for": "203.0.113.10"
+    },
+    "payload": {
+      "customerEmail": "private@example.test"
+    },
+    "receivedAt": "2026-07-18T07:00:00.000Z"
+  }
+}

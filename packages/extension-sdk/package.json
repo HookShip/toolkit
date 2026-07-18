@@ -1,0 +1,93 @@
+{
+  "name": "@webhook-portal/extension-sdk",
+  "version": "0.1.0",
+  "description": "Data-only extension manifests, signed bundles, permissions, declarative runtimes, and dependency locks.",
+  "keywords": [
+    "webhook",
+    "webhooks",
+    "extension",
+    "sdk"
+  ],
+  "license": "Apache-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "files": [
+    "dist"
+  ],
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./bundle": {
+      "types": "./dist/bundle.d.ts",
+      "import": "./dist/bundle.js"
+    },
+    "./canonical": {
+      "types": "./dist/canonical.d.ts",
+      "import": "./dist/canonical.js"
+    },
+    "./examples": {
+      "types": "./dist/examples.d.ts",
+      "import": "./dist/examples.js"
+    },
+    "./errors": {
+      "types": "./dist/errors.d.ts",
+      "import": "./dist/errors.js"
+    },
+    "./json-pointer": {
+      "types": "./dist/json-pointer.d.ts",
+      "import": "./dist/json-pointer.js"
+    },
+    "./lock": {
+      "types": "./dist/lock.d.ts",
+      "import": "./dist/lock.js"
+    },
+    "./manifest": {
+      "types": "./dist/manifest.d.ts",
+      "import": "./dist/manifest.js"
+    },
+    "./packs": {
+      "types": "./dist/packs.d.ts",
+      "import": "./dist/packs.js"
+    },
+    "./permissions": {
+      "types": "./dist/permissions.d.ts",
+      "import": "./dist/permissions.js"
+    },
+    "./policy": {
+      "types": "./dist/policy.d.ts",
+      "import": "./dist/policy.js"
+    },
+    "./resolver": {
+      "types": "./dist/resolver.d.ts",
+      "import": "./dist/resolver.js"
+    },
+    "./semver": {
+      "types": "./dist/semver.d.ts",
+      "import": "./dist/semver.js"
+    },
+    "./signatures": {
+      "types": "./dist/signatures.d.ts",
+      "import": "./dist/signatures.js"
+    },
+    "./transform": {
+      "types": "./dist/transform.d.ts",
+      "import": "./dist/transform.js"
+    }
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "lint": "eslint src test",
+    "test": "vitest run",
+    "test:coverage": "node ../../scripts/test-coverage.mjs --project packages/extension-sdk",
+    "typecheck": "tsc -p tsconfig.test.json"
+  }
+}

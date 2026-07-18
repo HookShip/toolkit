@@ -1,0 +1,47 @@
+{
+  "name": "@webhook-portal/contract-core",
+  "version": "0.1.0",
+  "description": "Contract parsing, validation, canonicalization, and generation core.",
+  "keywords": [
+    "webhook",
+    "webhooks",
+    "openapi",
+    "asyncapi",
+    "json-schema",
+    "contract-testing"
+  ],
+  "license": "Apache-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "files": [
+    "dist"
+  ],
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "lint": "eslint src test",
+    "test": "vitest run",
+    "test:coverage": "node ../../scripts/test-coverage.mjs --project packages/contract-core",
+    "typecheck": "tsc -p tsconfig.test.json"
+  },
+  "dependencies": {
+    "@apidevtools/openapi-schemas": "^2.1.0",
+    "@asyncapi/specs": "^6.11.1",
+    "@webhook-portal/canonical-model": "workspace:*",
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1",
+    "yaml": "^2.9.0"
+  }
+}
