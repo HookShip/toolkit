@@ -20,8 +20,7 @@
 
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { mkdir, readFile, rm, rmdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { PassThrough } from "node:stream";
@@ -47,6 +46,26 @@ const metadataFixture = path.join(
   repoRoot,
   "examples/metadata/order-delivered.json",
 );
+const learningExamples = path.join(repoRoot, "examples/learning");
+const compatibilityPrevious = path.join(
+  learningExamples,
+  "compatibility-previous.openapi.yaml",
+);
+const compatibilityNext = path.join(
+  learningExamples,
+  "compatibility-next-breaking.openapi.yaml",
+);
+const migrationInventory = path.join(
+  learningExamples,
+  "migration.inventory.json",
+);
+const targetCapabilities = path.join(
+  learningExamples,
+  "target-capabilities.json",
+);
+const targetPolicy = path.join(learningExamples, "target-policy.json");
+const supportTimeline = path.join(learningExamples, "support-timeline.json");
+const supportScope = path.join(learningExamples, "support-scope.json");
 
 let currentStep = "startup";
 function step(name) {
@@ -135,7 +154,10 @@ async function authenticated(address, apiToken, requestPath, init = {}) {
 }
 
 async function main() {
-  const workDir = await mkdtemp(path.join(tmpdir(), "webhook-portal-smoke-"));
+  const workRoot = path.join(repoRoot, ".smoke-work");
+  const workDir = path.join(workRoot, String(process.pid));
+  await rm(workDir, { recursive: true, force: true });
+  await mkdir(workDir, { recursive: true });
   let running;
   try {
     // --- 1. validate -------------------------------------------------------
@@ -190,7 +212,68 @@ async function main() {
       diffedBody.nextChecksum.value,
     );
 
-    // --- 4. fixture ----------------------------------------------------------
+    // --- 4. compatibility report --------------------------------------------
+    step("render a breaking compatibility report");
+    const compatibility = await cli([
+      "compatibility-report",
+      compatibilityPrevious,
+      compatibilityNext,
+      "--format",
+      "json",
+    ]);
+    expectExit(compatibility, [5], "compatibility-report");
+    const compatibilityBody = compatibility.stdout.json();
+    assert.equal(compatibilityBody.status, "breaking");
+    assert.equal(compatibilityBody.report.decision, "block");
+
+    // --- 5. migration assessment --------------------------------------------
+    step("assess the synthetic migration inventory without provider access");
+    const assessed = await cli([
+      "migration-assess",
+      migrationInventory,
+      compatibilityPrevious,
+      "--target-capabilities",
+      targetCapabilities,
+      "--target-policy",
+      targetPolicy,
+      "--format",
+      "json",
+    ]);
+    expectExit(assessed, [0], "migration-assess");
+    const assessedBody = assessed.stdout.json();
+    assert.equal(assessedBody.assessment.readiness.blocked, false);
+    assert.equal(assessedBody.assessment.counts.endpoints, 1);
+
+    // --- 6. support evidence -------------------------------------------------
+    step("create and verify an unsigned metadata-only evidence bundle");
+    const evidencePath = path.join(workDir, "support-evidence.json");
+    const evidence = await cli([
+      "support-evidence",
+      supportTimeline,
+      "--case-id",
+      "case_synthetic_smoke",
+      "--scope",
+      supportScope,
+      "--from",
+      "2026-07-18T10:00:00.000Z",
+      "--to",
+      "2026-07-18T10:03:00.000Z",
+      "--format",
+      "json",
+      "--out",
+      evidencePath,
+    ]);
+    expectExit(evidence, [0], "support-evidence");
+    assert.equal(evidence.stdout.json().status, "unsigned");
+    const evidenceVerification = await cli([
+      "support-evidence-verify",
+      evidencePath,
+    ]);
+    expectExit(evidenceVerification, [0], "support-evidence-verify");
+    assert.equal(evidenceVerification.stdout.json().valid, true);
+    assert.equal(evidenceVerification.stdout.json().signature, "unsigned");
+
+    // --- 7. fixture ----------------------------------------------------------
     step("generate a fixture for order.created v1");
     const fixtured = await cli([
       "fixture",
@@ -206,7 +289,7 @@ async function main() {
     assert.equal(typeof fixturedBody.value.id, "string");
     assert.ok(["created", "paid"].includes(fixturedBody.value.status));
 
-    // --- 5. types --------------------------------------------------------
+    // --- 8. types --------------------------------------------------------
     step("generate TypeScript types for order.created v1");
     const typed = await cli([
       "types",
@@ -227,7 +310,7 @@ async function main() {
       "generated types should declare the event's generated type name",
     );
 
-    // --- 6. sign / verify (independent of any server) ----------------------
+    // --- 9. sign / verify (independent of any server) ----------------------
     step("sign a payload and verify it back");
     const bodyPath = path.join(workDir, "test-body.json");
     const headersPath = path.join(workDir, "test-headers.json");
@@ -255,7 +338,7 @@ async function main() {
     const verifiedBody = verified.stdout.json();
     assert.equal(verifiedBody.ok, true, "signed payload must verify");
 
-    // --- 7. start the in-memory, in-process reference server ---------------
+    // --- 10. start the in-memory, in-process reference server --------------
     step("start an in-memory reference server (no PostgreSQL/MinIO/Docker)");
     const apiToken = randomBytes(24).toString("base64url");
     const ingestSecret = randomBytes(24).toString("base64url");
@@ -278,7 +361,7 @@ async function main() {
     const address = `http://127.0.0.1:${built.app.server.address().port}`;
     process.stdout.write(`  reference server listening at ${address}\n`);
 
-    // --- 8. publish + publish-status ----------------------------------------
+    // --- 11. publish + publish-status ---------------------------------------
     step("publish the contract to the reference server");
     const serverEnv = { ...process.env, REFERENCE_API_TOKEN: apiToken };
     const published = await cli(
@@ -304,7 +387,7 @@ async function main() {
     expectExit(publishStatus, [0], "publish-status");
     assert.equal(publishStatus.stdout.json().response.status, "completed");
 
-    // --- 9. injected reference workflow: endpoint, subscription, secret,
+    // --- 12. injected reference workflow: endpoint, subscription, secret,
     //        signed test — driven directly over loopback HTTP -------------
     step("create an endpoint, subscription, and secret");
     const created = await authenticated(address, apiToken, "/v1/endpoints", {
@@ -364,7 +447,7 @@ async function main() {
       "the self-addressed loopback test receiver must acknowledge synchronously",
     );
 
-    // --- 10. ingest metadata -------------------------------------------------
+    // --- 13. ingest metadata -------------------------------------------------
     step("ingest a metadata delivery observation");
     const ingested = await cli(
       ["ingest", metadataFixture, "--server", address],
@@ -372,7 +455,7 @@ async function main() {
     );
     expectExit(ingested, [0], "ingest");
 
-    // --- 11. timeline --------------------------------------------------------
+    // --- 14. timeline --------------------------------------------------------
     step("inspect the resulting timeline");
     const timeline = await cli(
       ["timeline", "--server", address, "--limit", "50"],
@@ -393,6 +476,7 @@ async function main() {
       await running.close();
     }
     await rm(workDir, { recursive: true, force: true });
+    await rmdir(workRoot).catch(() => undefined);
   }
 }
 

@@ -1,0 +1,27 @@
+{
+  "adapter": {
+    "id": "synthetic-target",
+    "name": "Synthetic target adapter",
+    "version": "1.0.0"
+  },
+  "capabilities": {
+    "endpoint.create": "supported",
+    "endpoint.read": "supported",
+    "endpoint.update": "supported",
+    "endpoint.pause": "supported",
+    "endpoint.resume": "supported",
+    "endpoint.delete": "supported",
+    "endpoint.verify": "supported",
+    "subscription.read": "supported",
+    "subscription.replace": "supported",
+    "subscription.pause": "supported",
+    "subscription.resume": "supported",
+    "secret.create": "supported",
+    "secret.rotate_with_overlap": "supported",
+    "secret.revoke": "supported",
+    "send_test": "supported",
+    "request_replay": "supported",
+    "metadata.poll": "supported",
+    "metadata.backfill": "supported"
+  }
+}

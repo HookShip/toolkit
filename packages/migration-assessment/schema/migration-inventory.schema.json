@@ -1,0 +1,285 @@
+{
+  "$defs": {
+    "destination": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "maxLength": 512,
+          "minLength": 1,
+          "type": "string"
+        },
+        "kind": {
+          "const": "http"
+        },
+        "providerId": {
+          "maxLength": 512,
+          "minLength": 1,
+          "type": "string"
+        },
+        "url": {
+          "format": "uri",
+          "maxLength": 2048,
+          "type": "string"
+        }
+      },
+      "required": ["id", "kind", "url"],
+      "type": "object"
+    },
+    "endpoint": {
+      "additionalProperties": false,
+      "properties": {
+        "destinationIds": {
+          "items": {
+            "maxLength": 512,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 100,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "id": {
+          "maxLength": 512,
+          "minLength": 1,
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 512,
+          "minLength": 1,
+          "type": "string"
+        },
+        "observability": {
+          "additionalProperties": false,
+          "properties": {
+            "attemptLogs": {
+              "type": "boolean"
+            },
+            "auditLogs": {
+              "type": "boolean"
+            },
+            "deliveryLogs": {
+              "type": "boolean"
+            },
+            "metrics": {
+              "type": "boolean"
+            },
+            "replay": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "attemptLogs",
+            "auditLogs",
+            "deliveryLogs",
+            "metrics",
+            "replay"
+          ],
+          "type": "object"
+        },
+        "providerId": {
+          "maxLength": 512,
+          "minLength": 1,
+          "type": "string"
+        },
+        "rate": {
+          "additionalProperties": false,
+          "properties": {
+            "burst": {
+              "minimum": 0,
+              "type": "number"
+            },
+            "requestsPerSecond": {
+              "minimum": 0,
+              "type": "number"
+            },
+            "supported": {
+              "type": "boolean"
+            }
+          },
+          "required": ["supported"],
+          "type": "object"
+        },
+        "retention": {
+          "additionalProperties": false,
+          "properties": {
+            "attemptLogDays": {
+              "minimum": 0,
+              "type": "number"
+            },
+            "deliveryLogDays": {
+              "minimum": 0,
+              "type": "number"
+            },
+            "payloadRetentionDays": {
+              "minimum": 0,
+              "type": "number"
+            }
+          },
+          "type": "object"
+        },
+        "retry": {
+          "additionalProperties": false,
+          "properties": {
+            "backoff": {
+              "enum": ["exponential", "fixed", "provider-managed", "unknown"]
+            },
+            "maxAttempts": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "maxDurationSeconds": {
+              "minimum": 0,
+              "type": "number"
+            },
+            "supported": {
+              "type": "boolean"
+            }
+          },
+          "required": ["supported"],
+          "type": "object"
+        },
+        "signing": {
+          "additionalProperties": false,
+          "properties": {
+            "algorithms": {
+              "items": {
+                "maxLength": 512,
+                "minLength": 1,
+                "type": "string"
+              },
+              "maxItems": 16,
+              "type": "array",
+              "uniqueItems": true
+            },
+            "headerNames": {
+              "items": {
+                "maxLength": 512,
+                "minLength": 1,
+                "type": "string"
+              },
+              "maxItems": 32,
+              "type": "array",
+              "uniqueItems": true
+            },
+            "profile": {
+              "maxLength": 512,
+              "minLength": 1,
+              "type": "string"
+            },
+            "rotationSupported": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "algorithms",
+            "headerNames",
+            "profile",
+            "rotationSupported"
+          ],
+          "type": "object"
+        },
+        "state": {
+          "enum": ["active", "disabled", "paused", "unknown"]
+        },
+        "subscriptions": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "event": {
+                "maxLength": 512,
+                "minLength": 1,
+                "type": "string"
+              },
+              "providerId": {
+                "maxLength": 512,
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": ["event"],
+            "type": "object"
+          },
+          "maxItems": 500,
+          "type": "array"
+        }
+      },
+      "required": [
+        "destinationIds",
+        "id",
+        "observability",
+        "providerId",
+        "rate",
+        "retention",
+        "retry",
+        "state"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://webhook-portal.dev/schemas/migration-inventory/2026-07-18",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "const": "https://webhook-portal.dev/schemas/migration-inventory/2026-07-18"
+    },
+    "destinations": {
+      "items": {
+        "$ref": "#/$defs/destination"
+      },
+      "maxItems": 1000,
+      "type": "array"
+    },
+    "endpoints": {
+      "items": {
+        "$ref": "#/$defs/endpoint"
+      },
+      "maxItems": 1000,
+      "type": "array"
+    },
+    "format": {
+      "const": "webhook-portal.migration-inventory"
+    },
+    "formatVersion": {
+      "const": "1.0.0"
+    },
+    "provider": {
+      "additionalProperties": false,
+      "properties": {
+        "accountId": {
+          "maxLength": 512,
+          "minLength": 1,
+          "type": "string"
+        },
+        "connectionId": {
+          "maxLength": 512,
+          "minLength": 1,
+          "type": "string"
+        },
+        "kind": {
+          "enum": ["custom-http", "hookdeck", "svix"]
+        },
+        "name": {
+          "maxLength": 512,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": ["accountId", "kind"],
+      "type": "object"
+    },
+    "schemaVersion": {
+      "const": "2026-07-18"
+    }
+  },
+  "required": [
+    "$schema",
+    "destinations",
+    "endpoints",
+    "format",
+    "formatVersion",
+    "provider",
+    "schemaVersion"
+  ],
+  "type": "object"
+}

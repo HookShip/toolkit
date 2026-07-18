@@ -18,11 +18,14 @@ export const openPackageDirectories = new Set([
   "adapter-sdk",
   "canonical-model",
   "cli",
+  "compatibility-report",
   "contract-core",
   "extension-conformance",
   "extension-sdk",
+  "migration-assessment",
   "portal-components",
   "signing",
+  "support-evidence",
 ]);
 
 export const cloudPackageDirectories = new Set([

@@ -1,0 +1,55 @@
+{
+  "name": "@webhook-portal/compatibility-report",
+  "version": "0.1.0",
+  "description": "Deterministic, verifiable compatibility reports for canonical webhook contracts.",
+  "keywords": [
+    "webhook",
+    "webhooks",
+    "compatibility",
+    "contract-testing",
+    "reporting"
+  ],
+  "license": "Apache-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./renderers": {
+      "types": "./dist/renderers.d.ts",
+      "import": "./dist/renderers.js"
+    },
+    "./report": {
+      "types": "./dist/report.d.ts",
+      "import": "./dist/report.js"
+    },
+    "./verification": {
+      "types": "./dist/verification.d.ts",
+      "import": "./dist/verification.js"
+    }
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "lint": "eslint src test",
+    "test": "vitest run",
+    "test:coverage": "node ../../scripts/test-coverage.mjs --project packages/compatibility-report",
+    "typecheck": "tsc -p tsconfig.test.json"
+  },
+  "dependencies": {
+    "@webhook-portal/canonical-model": "workspace:*",
+    "@webhook-portal/contract-core": "workspace:*"
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "allowedSigningAlgorithms": ["hmac-sha256"],
+  "endpointLimit": 100,
+  "minimumRetention": {
+    "attemptLogDays": 7,
+    "deliveryLogDays": 30
+  },
+  "observability": {
+    "attemptLogs": true,
+    "auditLogs": true,
+    "deliveryLogs": true,
+    "metrics": true,
+    "replay": true
+  },
+  "rate": {
+    "maxBurst": 100,
+    "maxRequestsPerSecond": 100,
+    "supported": true
+  },
+  "requireHttps": true,
+  "requireSigning": true,
+  "retry": {
+    "maxAttempts": 10,
+    "supported": true
+  },
+  "subscriptionLimitPerEndpoint": 100
+}

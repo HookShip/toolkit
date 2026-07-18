@@ -1,0 +1,76 @@
+{
+  "name": "@webhook-portal/support-evidence",
+  "version": "0.1.0",
+  "description": "Privacy-safe, signed metadata evidence bundles for webhook support cases.",
+  "keywords": [
+    "webhook",
+    "webhooks",
+    "support",
+    "evidence",
+    "privacy"
+  ],
+  "license": "Apache-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./bundle": {
+      "types": "./dist/bundle.d.ts",
+      "import": "./dist/bundle.js"
+    },
+    "./canonical": {
+      "types": "./dist/canonical.d.ts",
+      "import": "./dist/canonical.js"
+    },
+    "./errors": {
+      "types": "./dist/errors.d.ts",
+      "import": "./dist/errors.js"
+    },
+    "./examples": {
+      "types": "./dist/examples.d.ts",
+      "import": "./dist/examples.js"
+    },
+    "./metrics": {
+      "types": "./dist/metrics.d.ts",
+      "import": "./dist/metrics.js"
+    },
+    "./renderers": {
+      "types": "./dist/renderers.d.ts",
+      "import": "./dist/renderers.js"
+    },
+    "./sanitizer": {
+      "types": "./dist/sanitizer.d.ts",
+      "import": "./dist/sanitizer.js"
+    },
+    "./signatures": {
+      "types": "./dist/signatures.d.ts",
+      "import": "./dist/signatures.js"
+    },
+    "./types": {
+      "types": "./dist/types.d.ts",
+      "import": "./dist/types.js"
+    }
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "lint": "eslint src test",
+    "test": "vitest run",
+    "test:coverage": "node ../../scripts/test-coverage.mjs --project packages/support-evidence",
+    "typecheck": "tsc -p tsconfig.test.json"
+  }
+}

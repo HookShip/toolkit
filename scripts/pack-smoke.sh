@@ -27,6 +27,18 @@ while IFS= read -r package_dir; do
   PACKAGES+=("$package_dir")
 done < <(node scripts/release.mjs list-packages)
 
+# These public learning-feature packages are independently publishable and must
+# pass the same tarball/install contract even before the coordinated release
+# manifest is expanded.
+for package_dir in \
+  packages/compatibility-report \
+  packages/migration-assessment \
+  packages/support-evidence; do
+  if [[ ! " ${PACKAGES[*]} " =~ " ${package_dir} " ]]; then
+    PACKAGES+=("$package_dir")
+  fi
+done
+
 WORKDIR="$ROOT/.pack-smoke-work"
 cleanup() {
   rm -rf "$WORKDIR"
@@ -154,6 +166,9 @@ mkdir -p "$install_dir"
       "@webhook-portal/extension-sdk/transform",
       "@webhook-portal/extension-conformance",
       "@webhook-portal/extension-conformance/runner",
+      "@webhook-portal/compatibility-report",
+      "@webhook-portal/migration-assessment",
+      "@webhook-portal/support-evidence",
       "@webhook-portal/cli",
       "@webhook-portal/cli/reference-server",
     ];

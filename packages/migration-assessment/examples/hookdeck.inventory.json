@@ -1,0 +1,60 @@
+{
+  "$schema": "https://webhook-portal.dev/schemas/migration-inventory/2026-07-18",
+  "destinations": [
+    {
+      "id": "hookdeck-destination",
+      "kind": "http",
+      "providerId": "dst_hookdeck_01",
+      "url": "https://receiver.example/webhooks/orders"
+    }
+  ],
+  "endpoints": [
+    {
+      "destinationIds": ["hookdeck-destination"],
+      "id": "hookdeck-orders",
+      "name": "Orders production",
+      "observability": {
+        "attemptLogs": true,
+        "auditLogs": false,
+        "deliveryLogs": true,
+        "metrics": true,
+        "replay": true
+      },
+      "providerId": "src_hookdeck_01",
+      "rate": {
+        "requestsPerSecond": 100,
+        "supported": true
+      },
+      "retention": {
+        "attemptLogDays": 7,
+        "deliveryLogDays": 30
+      },
+      "retry": {
+        "backoff": "exponential",
+        "maxAttempts": 8,
+        "supported": true
+      },
+      "signing": {
+        "algorithms": ["hmac-sha256"],
+        "headerNames": ["webhook-signature"],
+        "profile": "standard-hmac",
+        "rotationSupported": true
+      },
+      "state": "active",
+      "subscriptions": [
+        {
+          "event": "order.created"
+        }
+      ]
+    }
+  ],
+  "format": "webhook-portal.migration-inventory",
+  "formatVersion": "1.0.0",
+  "provider": {
+    "kind": "hookdeck",
+    "accountId": "project_team",
+    "connectionId": "hookdeck-connection",
+    "name": "hookdeck export"
+  },
+  "schemaVersion": "2026-07-18"
+}

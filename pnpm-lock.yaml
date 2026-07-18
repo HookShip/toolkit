@@ -204,12 +204,21 @@ importers:
       '@webhook-portal/canonical-model':
         specifier: workspace:*
         version: link:../canonical-model
+      '@webhook-portal/compatibility-report':
+        specifier: workspace:*
+        version: link:../compatibility-report
       '@webhook-portal/contract-core':
         specifier: workspace:*
         version: link:../contract-core
+      '@webhook-portal/migration-assessment':
+        specifier: workspace:*
+        version: link:../migration-assessment
       '@webhook-portal/signing':
         specifier: workspace:*
         version: link:../signing
+      '@webhook-portal/support-evidence':
+        specifier: workspace:*
+        version: link:../support-evidence
       fastify:
         specifier: ^5.10.0
         version: 5.10.0
@@ -222,6 +231,15 @@ importers:
       yaml:
         specifier: ^2.9.0
         version: 2.9.0
+
+  packages/compatibility-report:
+    dependencies:
+      '@webhook-portal/canonical-model':
+        specifier: workspace:*
+        version: link:../canonical-model
+      '@webhook-portal/contract-core':
+        specifier: workspace:*
+        version: link:../contract-core
 
   packages/contract-core:
     dependencies:
@@ -275,6 +293,15 @@ importers:
 
   packages/metering: {}
 
+  packages/migration-assessment:
+    dependencies:
+      '@webhook-portal/adapter-sdk':
+        specifier: workspace:*
+        version: link:../adapter-sdk
+      '@webhook-portal/canonical-model':
+        specifier: workspace:*
+        version: link:../canonical-model
+
   packages/portal-components:
     devDependencies:
       '@testing-library/jest-dom':
@@ -300,6 +327,8 @@ importers:
         version: 19.2.7(react@19.2.7)
 
   packages/signing: {}
+
+  packages/support-evidence: {}
 
   packages/tenancy: {}
 

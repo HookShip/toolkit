@@ -1284,6 +1284,10 @@ describe("CLI", () => {
       "publish",
       "publish-status",
       "diff",
+      "compatibility-report",
+      "migration-assess",
+      "support-evidence",
+      "support-evidence-verify",
       "fixture",
       "types",
       "sign",
@@ -1304,6 +1308,18 @@ describe("CLI", () => {
     expect(new Set(advertisedCommands)).toEqual(new Set(implementedCommands));
     expect(helpBody.commands).toContain(
       "ingest <metadata|-> [--server url] [--credential-id id] [--batch-id id]",
+    );
+    expect(helpBody.commands).toContain(
+      "compatibility-report <previous> <next> [--format json|markdown]",
+    );
+    expect(helpBody.commands).toContain(
+      "migration-assess <inventory> <contract> --target-capabilities file",
+    );
+    expect(helpBody.commands).toContain(
+      "support-evidence <timeline> --case-id id --scope file",
+    );
+    expect(helpBody.commands).toContain(
+      "support-evidence-verify <bundle> [--public-key-file file]",
     );
 
     // An unrecognized command name must be rejected explicitly...

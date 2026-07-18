@@ -39,12 +39,15 @@ support commitment. See [Status and limitations](#status-and-limitations).
 | ------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
 | [`@webhook-portal/canonical-model`](packages/canonical-model)             | Canonical contract/event data model, type guards, deterministic ordering and JSON helpers. Zero I/O.                                   | Yes              |
 | [`@webhook-portal/contract-core`](packages/contract-core)                 | Parses, validates, canonicalizes, checksums, and diffs OpenAPI/AsyncAPI contracts; generates fixtures and TypeScript types.            | Yes              |
+| [`@webhook-portal/compatibility-report`](packages/compatibility-report)   | Deterministic producer/consumer compatibility reports with remediation, rollout guidance, lineage, and integrity checks.               | Yes              |
 | [`@webhook-portal/signing`](packages/signing)                             | Standard Webhooks-compatible HMAC-SHA256 signing and verification.                                                                     | Yes              |
 | [`@webhook-portal/adapter-sdk`](packages/adapter-sdk)                     | Capability-driven adapter interfaces: commands, envelopes, scoped credentials, deadlines, canonical metadata types.                    | Yes              |
 | [`@webhook-portal/adapter-conformance`](packages/adapter-conformance)     | Reusable conformance harness so any adapter (first- or third-party) can prove it satisfies the SDK contract.                           | Yes              |
 | [`@webhook-portal/adapter-generic-http`](packages/adapter-generic-http)   | The open reference adapter: signed HTTP control commands plus authenticated metadata push/poll.                                        | Yes              |
 | [`@webhook-portal/extension-sdk`](packages/extension-sdk)                 | Data-only extension manifests, canonical bundles, Ed25519 trust, permissions, bounded transform/policy runtimes, and dependency locks. | Yes              |
 | [`@webhook-portal/extension-conformance`](packages/extension-conformance) | Framework-neutral conformance runner for manifests, bundles, permissions, deterministic execution, and a closed malicious corpus.      | Yes              |
+| [`@webhook-portal/migration-assessment`](packages/migration-assessment)   | Credential-free, read-only migration inventory import and target capability/readiness assessment.                                      | Yes              |
+| [`@webhook-portal/support-evidence`](packages/support-evidence)           | Metadata-only support evidence bundles with deterministic digests, optional Ed25519 signatures, and verification policy.               | Yes              |
 | [`@webhook-portal/portal-components`](packages/portal-components)         | Accessible, server-first headless React components for producer and consumer portals.                                                  | Yes              |
 | [`@webhook-portal/cli`](packages/cli)                                     | The `webhook-portal` command line tool, and the importable open single-team reference server (`@webhook-portal/cli/reference-server`). | Yes              |
 | [`@webhook-portal/reference-server`](apps/reference-server)               | Deployable process wrapper (Docker image, migrations, TLS) around the open reference server.                                           | No — private app |
@@ -134,10 +137,12 @@ pnpm pack:smoke
 Packs every coordinated-release package with `pnpm pack` and verifies the
 tarball a real `npm install` would produce — `LICENSE`/`README.md` present, no
 dev-only files leaked, and every declared `exports`/`types`/`bin` entry point
-actually exists. This includes the implemented extension SDK and extension
-conformance harness. It then installs all package tarballs together in a clean
-project, imports every public entry point, and invokes the packed CLI through
-its generated binary link. See [`scripts/pack-smoke.sh`](scripts/pack-smoke.sh).
+actually exists. This also includes the compatibility-report,
+migration-assessment, and support-evidence packages while their coordinated
+release cohort is being finalized. It then installs all package tarballs
+together in a clean project, imports every public entry point, and invokes the
+packed CLI through its generated binary link. See
+[`scripts/pack-smoke.sh`](scripts/pack-smoke.sh).
 
 ## CLI workflows
 
@@ -147,6 +152,12 @@ Full command reference: [`packages/cli/README.md`](packages/cli/README.md).
 webhook-portal validate contract.yaml
 webhook-portal import contract.yaml --out contract.canonical.json
 webhook-portal diff previous.yaml next.yaml
+webhook-portal compatibility-report previous.yaml next.yaml --format markdown
+webhook-portal migration-assess inventory.json contract.yaml \
+  --target-capabilities target-capabilities.json
+webhook-portal support-evidence timeline.json \
+  --case-id case_opaque_001 --scope scope.json --out evidence.json
+webhook-portal support-evidence-verify evidence.json
 webhook-portal fixture contract.yaml --event order.created --version 1
 webhook-portal types contract.yaml --event order.created --version 1
 webhook-portal sign body.json --secret-file .webhook-secret

@@ -26,6 +26,7 @@ function dependenciesWithDefaults(input: RunCliDependencies): CliDependencies {
       ? {}
       : { httpTransport: input.httpTransport }),
     ...(input.idFactory === undefined ? {} : { idFactory: input.idFactory }),
+    ...(input.now === undefined ? {} : { now: input.now }),
     ...(input.startServer === undefined
       ? {}
       : { startServer: input.startServer }),

@@ -1,0 +1,59 @@
+{
+  "$schema": "https://webhook-portal.dev/schemas/migration-inventory/2026-07-18",
+  "destinations": [
+    {
+      "id": "destination-orders",
+      "kind": "http",
+      "providerId": "receiver-orders",
+      "url": "https://receiver.example/webhooks/orders"
+    }
+  ],
+  "endpoints": [
+    {
+      "destinationIds": ["destination-orders"],
+      "id": "orders-production",
+      "name": "Orders production",
+      "observability": {
+        "attemptLogs": true,
+        "auditLogs": false,
+        "deliveryLogs": true,
+        "metrics": true,
+        "replay": true
+      },
+      "providerId": "orders-production",
+      "rate": {
+        "requestsPerSecond": 100,
+        "supported": true
+      },
+      "retention": {
+        "attemptLogDays": 7,
+        "deliveryLogDays": 30
+      },
+      "retry": {
+        "backoff": "exponential",
+        "maxAttempts": 8,
+        "supported": true
+      },
+      "signing": {
+        "algorithms": ["hmac-sha256"],
+        "headerNames": ["webhook-signature"],
+        "profile": "standard-hmac",
+        "rotationSupported": true
+      },
+      "state": "active",
+      "subscriptions": [
+        {
+          "event": "order.created"
+        }
+      ]
+    }
+  ],
+  "format": "webhook-portal.migration-inventory",
+  "formatVersion": "1.0.0",
+  "provider": {
+    "accountId": "account-production",
+    "kind": "custom-http",
+    "name": "Existing HTTP delivery"
+  },
+  "schemaVersion": "2026-07-18"
+}

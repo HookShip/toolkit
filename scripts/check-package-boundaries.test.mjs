@@ -64,6 +64,16 @@ test("classifies extension SDK and conformance as open packages", () => {
   );
 });
 
+test("classifies learning feature packages as open packages", () => {
+  for (const directory of [
+    "compatibility-report",
+    "migration-assessment",
+    "support-evidence",
+  ]) {
+    assert.equal(workspaceKind("packages", directory), "open-package");
+  }
+});
+
 test("enforces extension package dependency boundaries", () => {
   assert.equal(
     isAllowedWorkspaceDependency(

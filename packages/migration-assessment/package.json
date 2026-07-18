@@ -1,0 +1,72 @@
+{
+  "name": "@webhook-portal/migration-assessment",
+  "version": "0.1.0",
+  "description": "Read-only webhook migration inventory and target readiness assessment.",
+  "keywords": [
+    "webhook",
+    "webhooks",
+    "migration",
+    "assessment",
+    "svix",
+    "hookdeck"
+  ],
+  "license": "Apache-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "examples",
+    "schema"
+  ],
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./assessment": {
+      "types": "./dist/assessment.d.ts",
+      "import": "./dist/assessment.js"
+    },
+    "./examples": {
+      "types": "./dist/examples.d.ts",
+      "import": "./dist/examples.js"
+    },
+    "./import": {
+      "types": "./dist/import.d.ts",
+      "import": "./dist/import.js"
+    },
+    "./render": {
+      "types": "./dist/render.d.ts",
+      "import": "./dist/render.js"
+    },
+    "./schema": {
+      "types": "./dist/schema.d.ts",
+      "import": "./dist/schema.js"
+    },
+    "./types": {
+      "types": "./dist/types.d.ts",
+      "import": "./dist/types.js"
+    },
+    "./schema.json": "./schema/migration-inventory.schema.json",
+    "./examples/custom-http.json": "./examples/custom-http.inventory.json",
+    "./examples/hookdeck.json": "./examples/hookdeck.inventory.json",
+    "./examples/svix.json": "./examples/svix.inventory.json"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "lint": "eslint src test",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.test.json"
+  },
+  "dependencies": {
+    "@webhook-portal/adapter-sdk": "workspace:*",
+    "@webhook-portal/canonical-model": "workspace:*"
+  }
+}

@@ -59,6 +59,12 @@ import {
   StdinSourceConflictError,
   type CliStreams,
 } from "./io.js";
+import {
+  compatibilityReportCommand,
+  migrationAssessCommand,
+  supportEvidenceCommand,
+  supportEvidenceVerifyCommand,
+} from "./learning-commands.js";
 import { emitFailure, emitSuccess } from "./output.js";
 import {
   migrateReferenceServerFromEnv,
@@ -83,6 +89,7 @@ export interface CliDependencies {
   readonly fetchImplementation?: typeof fetch;
   readonly httpTransport?: HttpTransport;
   readonly idFactory?: () => string;
+  readonly now?: () => Date;
   readonly startServer?: typeof startReferenceServerFromEnv;
   readonly migrateServer?: typeof migrateReferenceServerFromEnv;
 }
@@ -1678,6 +1685,10 @@ export function helpCommand(
     "publish <contract|-> [--server url] [--idempotency-key key]",
     "publish-status --idempotency-key key [--server url]",
     "diff <previous> <next>",
+    "compatibility-report <previous> <next> [--format json|markdown]",
+    "migration-assess <inventory> <contract> --target-capabilities file",
+    "support-evidence <timeline> --case-id id --scope file",
+    "support-evidence-verify <bundle> [--public-key-file file]",
     "fixture <contract> --event name [--out file]",
     "types <contract> --event name [--out file]",
     "sign [body|-] (secret from WEBHOOK_SECRET/env/file/stdin)",
@@ -1724,6 +1735,14 @@ export async function runCommand(
       return publishStatusCommand(args, dependencies);
     case "diff":
       return diffCommand(args, dependencies);
+    case "compatibility-report":
+      return compatibilityReportCommand(args, dependencies);
+    case "migration-assess":
+      return migrationAssessCommand(args, dependencies);
+    case "support-evidence":
+      return supportEvidenceCommand(args, dependencies);
+    case "support-evidence-verify":
+      return supportEvidenceVerifyCommand(args, dependencies);
     case "fixture":
       return fixtureCommand(args, dependencies);
     case "types":

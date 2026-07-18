@@ -1,0 +1,27 @@
+openapi: 3.1.0
+info:
+  title: Synthetic order webhook compatibility example
+  version: 1.0.0
+webhooks:
+  order.created:
+    post:
+      x-event-id: synthetic-order-created
+      x-event-type: order.created
+      x-event-version: "1"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [id, status]
+              properties:
+                id:
+                  type: string
+                status:
+                  type: string
+                  enum: [created, paid]
+      responses:
+        "204":
+          description: Synthetic acknowledgement

@@ -1,0 +1,56 @@
+{
+  "records": [
+    {
+      "attempt": 1,
+      "deliveryId": "synthetic-delivery-001",
+      "durationMilliseconds": 145,
+      "endpointId": "synthetic-endpoint",
+      "eventId": "synthetic-order-created",
+      "eventVersion": {
+        "eventType": "order.created",
+        "schemaChecksum": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "version": "1"
+      },
+      "kind": "delivery_attempt",
+      "mappingVersion": {
+        "name": "webhook-portal.canonical",
+        "schemaVersion": "2026-07-01",
+        "version": "1.0.0"
+      },
+      "occurredAt": "2026-07-18T10:01:00.000Z",
+      "providerAttemptId": "synthetic-attempt-001",
+      "responseStatusCode": 202,
+      "retryable": false,
+      "schemaVersion": "2026-07-01",
+      "sequence": 1,
+      "status": "delivered",
+      "traceId": "synthetic-trace-001"
+    },
+    {
+      "attempt": 1,
+      "deliveryId": "synthetic-delivery-002",
+      "durationMilliseconds": 320,
+      "endpointId": "synthetic-endpoint",
+      "eventId": "synthetic-order-created",
+      "eventVersion": {
+        "eventType": "order.created",
+        "schemaChecksum": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "version": "1"
+      },
+      "kind": "delivery_attempt",
+      "mappingVersion": {
+        "name": "webhook-portal.canonical",
+        "schemaVersion": "2026-07-01",
+        "version": "1.0.0"
+      },
+      "occurredAt": "2026-07-18T10:02:00.000Z",
+      "providerAttemptId": "synthetic-attempt-002",
+      "responseStatusCode": 503,
+      "retryable": true,
+      "schemaVersion": "2026-07-01",
+      "sequence": 1,
+      "status": "failed",
+      "traceId": "synthetic-trace-002"
+    }
+  ]
+}

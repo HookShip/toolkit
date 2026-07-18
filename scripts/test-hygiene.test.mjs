@@ -19,6 +19,7 @@ const expectedTestWorkspaces = [
   "packages/billing",
   "packages/canonical-model",
   "packages/cli",
+  "packages/compatibility-report",
   "packages/contract-core",
   "packages/db",
   "packages/extension-conformance",
@@ -26,8 +27,10 @@ const expectedTestWorkspaces = [
   "packages/extension-sdk",
   "packages/kms",
   "packages/metering",
+  "packages/migration-assessment",
   "packages/portal-components",
   "packages/signing",
+  "packages/support-evidence",
   "packages/tenancy",
 ];
 const testFilePattern = /\.(?:spec|test)\.[cm]?[jt]sx?$/u;

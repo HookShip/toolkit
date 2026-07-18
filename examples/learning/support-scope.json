@@ -1,0 +1,14 @@
+{
+  "tenantId": {
+    "kind": "opaque",
+    "value": "synthetic-tenant"
+  },
+  "environmentId": {
+    "kind": "opaque",
+    "value": "synthetic-environment"
+  },
+  "projectId": {
+    "kind": "opaque",
+    "value": "synthetic-project"
+  }
+}

@@ -6,6 +6,12 @@ Contract, signing, test, metadata, and reference-server tooling.
 webhook-portal validate contract.yaml
 webhook-portal import contract.yaml --out contract.canonical.json
 webhook-portal diff previous.yaml next.yaml
+webhook-portal compatibility-report previous.yaml next.yaml --format markdown
+webhook-portal migration-assess inventory.json contract.yaml \
+  --target-capabilities target-capabilities.json
+webhook-portal support-evidence timeline.json \
+  --case-id case_opaque_001 --scope scope.json --out evidence.json
+webhook-portal support-evidence-verify evidence.json
 webhook-portal fixture contract.yaml --event order.created --version 1
 webhook-portal types contract.yaml --event order.created --version 1
 webhook-portal sign body.json --secret-file .webhook-secret
@@ -25,6 +31,88 @@ the contract explicitly marks one current through
 `x-webhook-portal-current-version`/`x-current-version` or a version-level
 `x-webhook-portal-current: true`/`x-current: true`. Versions are never chosen
 lexicographically.
+
+## Compatibility, migration, and support evidence
+
+The repository includes synthetic, credential-free examples under
+[`examples/learning`](../../examples/learning):
+
+```sh
+# Returns exit 5 because the next synthetic contract adds a required field.
+webhook-portal compatibility-report \
+  examples/learning/compatibility-previous.openapi.yaml \
+  examples/learning/compatibility-next-breaking.openapi.yaml \
+  --audience consumer \
+  --format markdown \
+  --out compatibility-report.md
+
+# Read-only: no provider credentials, network access, or provider mutations.
+webhook-portal migration-assess \
+  examples/learning/migration.inventory.json \
+  examples/learning/compatibility-previous.openapi.yaml \
+  --target-capabilities examples/learning/target-capabilities.json \
+  --target-policy examples/learning/target-policy.json \
+  --format json \
+  --out migration-assessment.json
+
+# Produces metadata-only, explicitly unsigned evidence when no key is supplied.
+webhook-portal support-evidence \
+  examples/learning/support-timeline.json \
+  --case-id case_synthetic_001 \
+  --scope examples/learning/support-scope.json \
+  --from 2026-07-18T10:00:00.000Z \
+  --to 2026-07-18T10:03:00.000Z \
+  --purpose case-review \
+  --format json \
+  --out support-evidence.json
+
+webhook-portal support-evidence-verify support-evidence.json --json
+```
+
+`compatibility-report` accepts only exact, valid contracts. Invalid contracts
+exit `3`, partial contracts exit `4`, and breaking or unknown reports exit `5`.
+`--allow-breaking` changes only the exit for a known breaking report; it never
+changes the report status or permits an unknown result. JSON and Markdown
+artifacts are deterministic, and `--out` uses the CLI's atomic file writer.
+
+`migration-assess` accepts bounded JSON or YAML inventory, capability, and
+optional policy files. Inventory imports use the migration package's closed
+credential-free schema. A blocked assessment exits `5`; malformed or secret-
+shaped input exits `3`. The command never accepts provider credentials and does
+not perform network calls or provider writes.
+
+`support-evidence` accepts a bounded metadata timeline plus a strict tenant
+scope. `--from`/`--to` default to the supplied records, `--purpose` defaults to
+`case-review`, and `--expires-at` defaults to seven days after creation.
+Unsigned output includes a digest and explicit `unsigned` status. To sign, use
+an Ed25519 PKCS#8 private key in a permission-restricted file:
+
+```sh
+webhook-portal support-evidence \
+  examples/learning/support-timeline.json \
+  --case-id case_synthetic_001 \
+  --scope examples/learning/support-scope.json \
+  --signing-key-file support-private.pem \
+  --key-id support-key-2026-07 \
+  --out signed-support-evidence.json
+
+webhook-portal support-evidence-verify signed-support-evidence.json \
+  --public-key-file support-public.pem \
+  --require-signature
+```
+
+Private keys are never accepted literally or from stdin, and files granting
+group/other access are rejected. Verification also supports `--trust-policy`,
+`--valid-from`, `--valid-until`, `--revoked-at`,
+`--revocation-mode all|from-time`, `--allow-historical-signatures`, `--now`, and
+`--max-clock-skew-ms`. Tampered, expired, revoked, or otherwise untrusted
+evidence exits `6`; malformed bundles exit `3`. A trust policy contains `keys`
+entries with `keyId`, `publicKeyFile`, and optional validity/revocation
+timestamps. Relative public-key paths resolve from the policy file directory.
+
+For all four commands, `--json` emits a machine command envelope while
+`--format` selects the artifact representation. At most one input may use `-`
+for stdin.
 
 ## Talking to a reference server
 
