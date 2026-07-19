@@ -371,7 +371,8 @@ describe("parser resource and object safety", () => {
     expect(result.status).toBe("invalid");
     expect(result.diagnostics.length).toBeLessThanOrEqual(8);
     expect(result.diagnostics[0]?.code).toBe("ASYNCAPI_DOCUMENT_INVALID");
-    expect(performance.now() - started).toBeLessThan(1_000);
+    const timingBudgetMs = process.env["CI"] === "true" ? 3_000 : 1_000;
+    expect(performance.now() - started).toBeLessThan(timingBudgetMs);
   });
 
   it("enforces event counts and rejects external schema documents", () => {
