@@ -12,7 +12,7 @@ trap cleanup EXIT
 cd "$ROOT"
 rm -rf "$LAYOUT"
 node infra/validate-docker-context.mjs
-pnpm --filter @webhook-portal/reference-server build >/dev/null
+pnpm --filter @webhook-portal/reference-server... build >/dev/null
 pnpm --config.inject-workspace-packages=true \
   --filter @webhook-portal/reference-server \
   deploy --prod "$LAYOUT" >/dev/null

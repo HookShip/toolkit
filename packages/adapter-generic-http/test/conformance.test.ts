@@ -120,14 +120,17 @@ describe("real generic HTTP adapter conformance", () => {
       effects += 1;
       if (String(signed["idempotencyKey"]).startsWith("deadline-")) {
         return new Promise((_resolve, reject) => {
-          request.signal.addEventListener(
-            "abort",
-            () => {
-              cancelled = true;
-              reject(request.signal.reason);
-            },
-            { once: true },
-          );
+          let observed = false;
+          const abort = (): void => {
+            if (observed) return;
+            observed = true;
+            cancelled = true;
+            reject(request.signal.reason);
+          };
+          request.signal.addEventListener("abort", abort, { once: true });
+          if (request.signal.aborted) {
+            abort();
+          }
         });
       }
       return {
@@ -240,7 +243,7 @@ describe("real generic HTTP adapter conformance", () => {
         restart: () => makeAdapter(),
       },
       deadline: {
-        command: () => command("endpoint.create", `deadline-${counter++}`, 10),
+        command: () => command("endpoint.create", `deadline-${counter++}`, 500),
         wasCancelled: () => cancelled,
       },
       security: {
