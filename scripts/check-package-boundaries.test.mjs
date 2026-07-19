@@ -1,156 +1,118 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 import {
   checkBoundaries,
-  cloudPackageDirectories,
   isAllowedDirection,
   isAllowedWorkspaceDependency,
-  isOpenCoreExtensionAssetTarget,
+  isToolkitExtensionAssetTarget,
+  privateAppDirectories,
+  publicPackageDirectories,
   workspaceKind,
   workspacePackageName,
 } from "./check-package-boundaries.mjs";
 
-const kinds = ["open-package", "cloud-package", "open-app", "cloud-app"];
-const allowed = new Set([
-  "open-package->open-package",
-  "cloud-package->open-package",
-  "cloud-package->cloud-package",
-  "open-app->open-package",
-  "cloud-app->open-package",
-  "cloud-app->cloud-package",
-]);
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const expectedPackages = [
+  "adapter-conformance",
+  "adapter-generic-http",
+  "adapter-sdk",
+  "canonical-model",
+  "cli",
+  "compatibility-report",
+  "contract-core",
+  "extension-conformance",
+  "extension-sdk",
+  "migration-assessment",
+  "portal-components",
+  "signing",
+  "support-evidence",
+];
 
-test("permits only apps to cloud/open and cloud packages to open/cloud", () => {
+test("classifies exactly the 13 public packages and private app wrapper", async () => {
+  assert.deepEqual([...publicPackageDirectories].sort(), expectedPackages);
+  assert.deepEqual([...privateAppDirectories], ["reference-server"]);
+
+  const packageDirectories = (
+    await readdir(path.join(root, "packages"), {
+      withFileTypes: true,
+    })
+  )
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .sort();
+  const appDirectories = (
+    await readdir(path.join(root, "apps"), {
+      withFileTypes: true,
+    })
+  )
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .sort();
+
+  assert.deepEqual(packageDirectories, expectedPackages);
+  assert.deepEqual(appDirectories, ["reference-server"]);
+  for (const directory of expectedPackages) {
+    assert.equal(workspaceKind("packages", directory), "public-package");
+  }
+  assert.equal(workspaceKind("apps", "reference-server"), "private-app");
+});
+
+test("permits package dependencies and app-to-package dependencies only", () => {
+  const kinds = ["public-package", "private-app"];
   for (const from of kinds) {
     for (const to of kinds) {
       assert.equal(
         isAllowedDirection(from, to),
-        allowed.has(`${from}->${to}`),
+        from === "public-package"
+          ? to === "public-package"
+          : to === "public-package",
         `${from}->${to}`,
       );
     }
   }
 });
 
-test("classifies every managed workspace in the commercial layer", () => {
-  for (const directory of [
-    "adapter-hookdeck",
-    "adapter-svix",
-    "billing",
-    "db",
-    "extension-registry",
-    "kms",
-    "metering",
-    "tenancy",
+test("keeps extension-sdk on its minimal dependency allowlist", () => {
+  for (const dependency of [
+    "@webhook-portal/adapter-sdk",
+    "@webhook-portal/canonical-model",
+    "@webhook-portal/signing",
   ]) {
-    assert.equal(workspaceKind("packages", directory), "cloud-package");
+    assert.equal(
+      isAllowedWorkspaceDependency(
+        "packages",
+        "extension-sdk",
+        "public-package",
+        dependency,
+      ),
+      true,
+    );
   }
-  for (const directory of ["control-plane-api", "portal-web", "worker"]) {
-    assert.equal(workspaceKind("apps", directory), "cloud-app");
-  }
-});
-
-test("classifies extension SDK and conformance as open packages", () => {
-  assert.equal(workspaceKind("packages", "extension-sdk"), "open-package");
-  assert.equal(
-    workspaceKind("packages", "extension-conformance"),
-    "open-package",
-  );
-});
-
-test("classifies learning feature packages as open packages", () => {
-  for (const directory of [
-    "compatibility-report",
-    "migration-assessment",
-    "support-evidence",
-  ]) {
-    assert.equal(workspaceKind("packages", directory), "open-package");
-  }
-});
-
-test("enforces extension package dependency boundaries", () => {
   assert.equal(
     isAllowedWorkspaceDependency(
       "packages",
       "extension-sdk",
-      "open-package",
-      "@webhook-portal/canonical-model",
-    ),
-    true,
-  );
-  assert.equal(
-    isAllowedWorkspaceDependency(
-      "packages",
-      "extension-sdk",
-      "open-package",
+      "public-package",
       "@webhook-portal/contract-core",
     ),
     false,
   );
-  assert.equal(
-    isAllowedWorkspaceDependency(
-      "packages",
-      "extension-conformance",
-      "open-package",
-      "@webhook-portal/extension-sdk",
-    ),
-    true,
-  );
-  assert.equal(
-    isAllowedWorkspaceDependency(
-      "packages",
-      "extension-conformance",
-      "cloud-package",
-      "@webhook-portal/extension-registry",
-    ),
-    false,
-  );
-  assert.equal(
-    isAllowedWorkspaceDependency(
-      "packages",
-      "extension-registry",
-      "open-package",
-      "@webhook-portal/extension-sdk",
-    ),
-    true,
-  );
-  assert.equal(
-    isAllowedWorkspaceDependency(
-      "packages",
-      "extension-registry",
-      "cloud-package",
-      "@webhook-portal/db",
-    ),
-    true,
-  );
 });
 
-test("treats extension examples and artifacts as data outside open core", () => {
-  const repositoryRoot = path.resolve(
-    path.dirname(fileURLToPath(import.meta.url)),
-    "..",
-  );
+test("keeps runtime workspaces independent from extension data assets", () => {
   for (const target of [
-    path.join(repositoryRoot, "extensions", "connectors", "fixture.json"),
-    path.join(repositoryRoot, "examples", "extensions", "fixture.json"),
+    path.join(root, "extensions", "connectors", "fixture.json"),
+    path.join(root, "examples", "extensions", "fixture.json"),
   ]) {
-    assert.equal(isOpenCoreExtensionAssetTarget("open-package", target), true);
-    assert.equal(isOpenCoreExtensionAssetTarget("open-app", target), true);
-    assert.equal(
-      isOpenCoreExtensionAssetTarget("cloud-package", target),
-      false,
-    );
+    assert.equal(isToolkitExtensionAssetTarget("public-package", target), true);
+    assert.equal(isToolkitExtensionAssetTarget("private-app", target), true);
   }
-});
-
-test("keeps the reference server in the open application layer", () => {
-  assert.equal(workspaceKind("apps", "reference-server"), "open-app");
 });
 
 test("normalizes workspace subpath imports to their package name", () => {
@@ -165,29 +127,16 @@ test("validates the real workspace manifests and imports", async () => {
   assert.deepEqual(await checkBoundaries(), []);
 });
 
-test("keeps commercial packages out of the release cohort", async () => {
+test("release manifest contains every public package and no app wrapper", async () => {
   const releaseManifest = JSON.parse(
-    await readFile(
-      new URL("../release/manifest.json", import.meta.url),
-      "utf8",
-    ),
+    await readFile(path.join(root, "release", "manifest.json"), "utf8"),
   );
-  const releasePaths = releaseManifest.openPackages.map((entry) => entry.path);
-  for (const directory of cloudPackageDirectories) {
-    assert.equal(releasePaths.includes(`packages/${directory}`), false);
-  }
-});
-
-test("packs implemented open extension packages but not the private registry", async () => {
-  const releaseManifest = JSON.parse(
-    await readFile(
-      new URL("../release/manifest.json", import.meta.url),
-      "utf8",
-    ),
+  const releasePaths = releaseManifest.openPackages
+    .map((entry) => entry.path)
+    .sort();
+  assert.deepEqual(
+    releasePaths,
+    expectedPackages.map((directory) => `packages/${directory}`).sort(),
   );
-  const releasePaths = releaseManifest.openPackages.map((entry) => entry.path);
-  for (const directory of ["extension-sdk", "extension-conformance"]) {
-    assert.equal(releasePaths.includes(`packages/${directory}`), true);
-  }
-  assert.equal(releasePaths.includes("packages/extension-registry"), false);
+  assert.equal(releasePaths.includes("apps/reference-server"), false);
 });

@@ -13,6 +13,11 @@
       "version": "0.1.0"
     },
     {
+      "name": "@webhook-portal/compatibility-report",
+      "path": "packages/compatibility-report",
+      "version": "0.1.0"
+    },
+    {
       "name": "@webhook-portal/signing",
       "path": "packages/signing",
       "version": "0.1.0"
@@ -43,57 +48,24 @@
       "version": "0.1.0"
     },
     {
-      "name": "@webhook-portal/cli",
-      "path": "packages/cli",
+      "name": "@webhook-portal/migration-assessment",
+      "path": "packages/migration-assessment",
       "version": "0.1.0"
-    }
-  ],
-  "deferredOpenPackages": [
+    },
+    {
+      "name": "@webhook-portal/support-evidence",
+      "path": "packages/support-evidence",
+      "version": "0.1.0"
+    },
     {
       "name": "@webhook-portal/portal-components",
       "path": "packages/portal-components",
-      "reason": "Held outside the first coordinated package cohort until its separate React compatibility and accessibility release evidence is accepted."
-    }
-  ],
-  "privateImages": [
-    {
-      "name": "control-plane-api",
-      "packagePath": "apps/control-plane-api",
-      "dockerfile": "infra/managed/Dockerfile.api",
-      "version": "0.0.0",
-      "status": "engineering-pilot-only",
-      "digest": null,
-      "ociLabels": {
-        "org.opencontainers.image.version": "0.0.0",
-        "org.opencontainers.image.revision": "source-revision-required",
-        "org.opencontainers.image.licenses": "UNLICENSED"
-      }
+      "version": "0.1.0"
     },
     {
-      "name": "worker",
-      "packagePath": "apps/worker",
-      "dockerfile": "infra/managed/Dockerfile.worker",
-      "version": "0.0.0",
-      "status": "engineering-pilot-only",
-      "digest": null,
-      "ociLabels": {
-        "org.opencontainers.image.version": "0.0.0",
-        "org.opencontainers.image.revision": "source-revision-required",
-        "org.opencontainers.image.licenses": "UNLICENSED"
-      }
-    },
-    {
-      "name": "portal",
-      "packagePath": "apps/portal-web",
-      "dockerfile": "infra/managed/Dockerfile.portal",
-      "version": "0.0.0",
-      "status": "engineering-pilot-only",
-      "digest": null,
-      "ociLabels": {
-        "org.opencontainers.image.version": "0.0.0",
-        "org.opencontainers.image.revision": "source-revision-required",
-        "org.opencontainers.image.licenses": "UNLICENSED"
-      }
+      "name": "@webhook-portal/cli",
+      "path": "packages/cli",
+      "version": "0.1.0"
     }
   ]
 }

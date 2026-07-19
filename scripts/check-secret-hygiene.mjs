@@ -8,7 +8,6 @@ import { fileURLToPath } from "node:url";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const forbiddenBasenames = new Set([".env", ".npmrc"]);
 const reviewedFixturesAndDetectors = new Set([
-  "extensions/test-fixtures/development-signing-key/DO-NOT-USE-IN-PRODUCTION-private.pem",
   "extensions/test/seed-packs.test.mjs",
   "packages/extension-sdk/src/bundle.ts",
   "scripts/check-secret-hygiene.mjs",
@@ -16,7 +15,9 @@ const reviewedFixturesAndDetectors = new Set([
 const secretPatterns = [
   ["private key block", /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/],
   ["AWS access key", /\bAKIA[0-9A-Z]{16}\b/],
+  ["AWS temporary access key", /\bASIA[0-9A-Z]{16}\b/],
   ["GitHub token", /\bgh[pousr]_[A-Za-z0-9]{30,}\b/],
+  ["npm token", /\bnpm_[A-Za-z0-9]{36}\b/],
   ["Stripe secret key", /\bsk_(?:live|test)_[A-Za-z0-9]{20,}\b/],
 ];
 

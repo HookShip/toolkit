@@ -116,16 +116,29 @@ SH
   PATH="$fake_bin:$PATH" REAL_NODE="$real_node" CLI_LOG="$cli_log" \
     "$SCRATCH/examples/demo.sh" >"$demo_stdout" 2>"$demo_stderr"
 
-  grep -Fq \
+  grep -Fq -- \
     "ingest examples/metadata/order-delivered.json --server https://127.0.0.1:3210 --credential-id $REFERENCE_INGEST_CREDENTIAL_ID --secret-env REFERENCE_INGEST_SECRET" \
     "$cli_log"
-  if grep -Fq "$REFERENCE_INGEST_CREDENTIAL_ID" "$demo_stdout" ||
-    grep -Fq "$REFERENCE_INGEST_CREDENTIAL_ID" "$demo_stderr" ||
-    grep -Fq "$REFERENCE_INGEST_SECRET" "$demo_stdout" ||
-    grep -Fq "$REFERENCE_INGEST_SECRET" "$demo_stderr"; then
-    echo "demo printed ingest credential material" >&2
-    exit 1
-  fi
+
+  assert_absent() {
+    local value="$1"
+    local file="$2"
+    if grep -Fq -- "$value" "$file"; then
+      echo "demo printed ingest credential material" >&2
+      exit 1
+    else
+      local status=$?
+      if [[ "$status" -ne 1 ]]; then
+        echo "failed to inspect demo output for credential material" >&2
+        exit "$status"
+      fi
+    fi
+  }
+
+  assert_absent "$REFERENCE_INGEST_CREDENTIAL_ID" "$demo_stdout"
+  assert_absent "$REFERENCE_INGEST_CREDENTIAL_ID" "$demo_stderr"
+  assert_absent "$REFERENCE_INGEST_SECRET" "$demo_stdout"
+  assert_absent "$REFERENCE_INGEST_SECRET" "$demo_stderr"
 )
 
 test_fresh_demo_credential

@@ -23,12 +23,10 @@ it works today and how that is expected to evolve.
 
 ## Scope boundary enforced in this repository
 
-This repository intentionally contains only the **open foundation** (see
-[`README.md`](README.md#status-and-limitations) and [`ROADMAP.md`](ROADMAP.md)).
-Contributions that add a managed multi-tenant control plane, hosted portal,
-billing/metering, or other later-phase scope described in the roadmap are out of
-scope for this repository until that phase formally begins, regardless of
-otherwise-good code quality. This keeps the open/cloud boundary (enforced
+This repository intentionally contains only the standalone public toolkit (see
+[`README.md`](README.md) and [`ROADMAP.md`](ROADMAP.md)). Contributions that add
+a hosted multi-tenant control plane, billing/metering, or deployment-specific
+operations are out of scope. This keeps the public workspace boundary (enforced
 technically by
 [`scripts/check-package-boundaries.mjs`](scripts/check-package-boundaries.mjs))
 honest at the process level too.

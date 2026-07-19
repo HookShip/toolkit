@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
 
-import { readFileSync } from "node:fs";
 import {
   createServer as createHttpServer,
   type RequestListener,
@@ -8,19 +7,31 @@ import {
 import { createServer as createHttpsServer } from "node:https";
 import type { AddressInfo, Server, Socket } from "node:net";
 
+import selfsigned from "selfsigned";
 import { describe, expect, it } from "vitest";
 
 import { nodeHttpTransport, type HttpTransportRequest } from "../src/index.js";
 
-// Intentionally public, self-signed test identity. It is never packaged or
-// copied into the Docker build context and must never be used outside tests.
-const certificate = readFileSync(
-  new URL("./transport-test-cert.pem", import.meta.url),
-  "utf8",
+const testIdentity = await selfsigned.generate(
+  [{ name: "commonName", value: "transport.test" }],
+  {
+    algorithm: "sha256",
+    extensions: [
+      { cA: false, name: "basicConstraints" },
+      {
+        digitalSignature: true,
+        keyEncipherment: true,
+        name: "keyUsage",
+      },
+      {
+        altNames: [{ type: 2, value: "transport.test" }],
+        name: "subjectAltName",
+      },
+    ],
+    keySize: 2048,
+  },
 );
-const testIdentity = readFileSync(
-  new URL("./transport-test-identity.p12", import.meta.url),
-);
+const certificate = testIdentity.cert;
 
 type Protocol = "http" | "https";
 
@@ -37,8 +48,8 @@ function serverFor(
     protocol === "https"
       ? createHttpsServer(
           {
-            passphrase: "webhook-portal-test-only",
-            pfx: testIdentity,
+            cert: certificate,
+            key: testIdentity.private,
           },
           listener,
         )

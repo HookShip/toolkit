@@ -4,5 +4,4 @@
 coverage
 dist
 node_modules
-infra/managed/pilot/reports
 pnpm-lock.yaml

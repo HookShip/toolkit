@@ -1,10 +1,11 @@
-# Deterministic development signing key
+# Deterministic development signing identity
 
-**NON-PRODUCTION TEST ASSET — NEVER TRUST OR DEPLOY THIS PRIVATE KEY.**
+**NON-PRODUCTION TEST IDENTITY — NEVER TRUST IT IN PRODUCTION.**
 
-The key pair is the first RFC 8032 Ed25519 test vector encoded as PKCS#8/SPKI.
-It is intentionally public and deterministic so bundle bytes, signatures, and
-tamper tests are reproducible across machines.
+The public key is the first RFC 8032 Ed25519 test vector encoded as SPKI.
+`extensions/scripts/build-sign.mjs` derives the matching private key at runtime
+from the published RFC seed and public-key constants. No private-key file is
+stored in the repository.
 
 Key ID: `webhook-portal-development-test-key-rfc8032-1`
 

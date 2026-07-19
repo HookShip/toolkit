@@ -15,8 +15,7 @@ must not be accepted as production trust. Release tooling may reproduce a bundle
 digest and then re-sign it with separately controlled keys; no existing
 signature implies endorsement or marketplace approval.
 
-Private tenant-scoped distribution may use the managed registry boundary after
-its provenance, permission, review, lifecycle, and revocation gates pass. The
-complete private/public operating policy and explicitly unvalidated future
-economic hypotheses are in
-[`docs/launch/extension-distribution.md`](../docs/launch/extension-distribution.md).
+Any future remote distribution design must preserve the provenance, permissions,
+review, lifecycle, and revocation properties enforced by the SDK and conformance
+suite. It is outside the current repository scope; see
+[`ROADMAP.md`](../ROADMAP.md).

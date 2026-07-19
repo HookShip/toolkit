@@ -1,0 +1,60 @@
+title = "HookShip Toolkit gitleaks configuration"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Fixed credential value used only to test adapter credential scoping and redaction."
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "match"
+paths = ['''^packages/adapter-sdk/test/adapter-sdk\.test\.ts$''']
+regexes = ['''credential-secret-9b1''']
+
+[[allowlists]]
+description = "Fixed adapter idempotency identifier misclassified as a generic API key."
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "match"
+paths = ['''^packages/adapter-sdk/test/adapter-sdk\.test\.ts$''']
+regexes = ['''idempotency-1''']
+
+[[allowlists]]
+description = "Fixed webhook secret whose decoded bytes spell an explicit testing phrase; used to verify diagnostic redaction."
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "match"
+paths = ['''^packages/cli/test/cli\.test\.ts$''']
+regexes = ['''whsec_QWxhZGRpbjpvcGVuIHNlc2FtZSBmb3IgdGVzdGluZw==''']
+
+[[allowlists]]
+description = "Fixed Standard Webhooks-compatible secret used by CLI sign, verify, destination-safety, and file-resolution tests."
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "match"
+paths = ['''^packages/cli/test/cli\.test\.ts$''']
+regexes = ['''whsec_MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=''']
+
+[[allowlists]]
+description = "Fixed publish idempotency identifier misclassified as a generic API key."
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "match"
+paths = ['''^packages/cli/test/cli\.test\.ts$''']
+regexes = ['''publish-uncertain-0001''']
+
+[[allowlists]]
+description = "Deliberately fake short Stripe-shaped value used to prove contract examples containing credentials are rejected."
+targetRules = ["generic-api-key", "stripe-access-token"]
+condition = "AND"
+regexTarget = "match"
+paths = ['''^packages/contract-core/test/security\.test\.ts$''']
+regexes = ['''sk_live_1234567890''']
+
+[[allowlists]]
+description = "Public deterministic Standard Webhooks test-vector secret used to verify interoperable signatures."
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "match"
+paths = ['''^packages/signing/src/test-helpers\.ts$''']
+regexes = ['''whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw''']

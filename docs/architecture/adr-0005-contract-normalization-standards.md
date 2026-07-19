@@ -75,5 +75,5 @@ performs no network or filesystem fetches (`contract-core/README.md`).
   silently reinterpreted.
 - This decision is a data-normalization and validation architecture already
   implemented in `packages/contract-core` and `packages/canonical-model`, both
-  Apache-2.0 open packages usable independently of any managed control plane
+  Apache-2.0 public packages usable independently in this standalone toolkit
   (see [ADR-0001](adr-0001-open-core-workspace-boundary.md)).

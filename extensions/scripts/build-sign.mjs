@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import assert from "node:assert/strict";
+import { createPrivateKey } from "node:crypto";
 import { lstat, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -23,6 +24,12 @@ const developmentKeyDirectory = path.join(
 
 export const DEVELOPMENT_KEY_ID =
   "webhook-portal-development-test-key-rfc8032-1";
+
+const RFC8032_VECTOR_1 = Object.freeze({
+  privateSeed:
+    "9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60",
+  publicKey: "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
+});
 
 export const PACK_SPECS = Object.freeze([
   Object.freeze({
@@ -116,6 +123,18 @@ export async function developmentTrustPolicy() {
   });
 }
 
+function developmentPrivateKey() {
+  return createPrivateKey({
+    format: "jwk",
+    key: {
+      crv: "Ed25519",
+      d: Buffer.from(RFC8032_VECTOR_1.privateSeed, "hex").toString("base64url"),
+      kty: "OKP",
+      x: Buffer.from(RFC8032_VECTOR_1.publicKey, "hex").toString("base64url"),
+    },
+  }).export({ format: "pem", type: "pkcs8" });
+}
+
 export async function buildPack(spec) {
   const packDirectory = path.join(extensionsRoot, spec.relativeDirectory);
   const manifest = normalizeExtensionManifestDraft(
@@ -132,13 +151,9 @@ export async function buildPack(spec) {
       manifest,
     ),
   });
-  const privateKey = await readFile(
-    path.join(developmentKeyDirectory, "DO-NOT-USE-IN-PRODUCTION-private.pem"),
-    "utf8",
-  );
   const bundle = signExtensionBundle(unsignedBundle, {
     keyId: DEVELOPMENT_KEY_ID,
-    privateKey,
+    privateKey: developmentPrivateKey(),
   });
   const trustPolicy = await developmentTrustPolicy();
   const verification = verifyExtensionBundle(bundle, { trustPolicy });

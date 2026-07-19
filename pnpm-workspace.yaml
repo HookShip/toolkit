@@ -1,6 +1,18 @@
 packages:
-  - apps/*
-  - packages/*
+  - apps/reference-server
+  - packages/adapter-conformance
+  - packages/adapter-generic-http
+  - packages/adapter-sdk
+  - packages/canonical-model
+  - packages/cli
+  - packages/compatibility-report
+  - packages/contract-core
+  - packages/extension-conformance
+  - packages/extension-sdk
+  - packages/migration-assessment
+  - packages/portal-components
+  - packages/signing
+  - packages/support-evidence
 
 allowBuilds:
   esbuild: true

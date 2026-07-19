@@ -16,6 +16,8 @@ import { fileURLToPath } from "node:url";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const manifestPath = path.join(root, "release", "manifest.json");
 const workRoot = path.join(root, ".release-work");
+const referenceAppPath = "apps/reference-server";
+const publicPackageCount = 13;
 const semverPattern =
   /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?$/;
 
@@ -55,34 +57,100 @@ async function packageManifest(packageEntry) {
   return readJson(path.join(root, packageEntry.path, "package.json"));
 }
 
+async function publicPackagePaths() {
+  const entries = await readdir(path.join(root, "packages"), {
+    withFileTypes: true,
+  });
+  return entries
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => `packages/${entry.name}`)
+    .sort();
+}
+
+function sameValues(left, right) {
+  return (
+    left.length === right.length &&
+    left.every((value, index) => value === right[index])
+  );
+}
+
+async function checkReferenceApp(failures) {
+  try {
+    const pkg = await readJson(
+      path.join(root, referenceAppPath, "package.json"),
+    );
+    if (pkg.name !== "@webhook-portal/reference-server") {
+      failures.push(`${referenceAppPath}: package name mismatch`);
+    }
+    if (pkg.private !== true) {
+      failures.push(`${pkg.name}: packaging wrapper must remain private`);
+    }
+    if (pkg.license !== "Apache-2.0") {
+      failures.push(`${pkg.name}: license must be Apache-2.0`);
+    }
+    if (pkg.publishConfig !== undefined) {
+      failures.push(`${pkg.name}: private wrapper must not be publishable`);
+    }
+    if (pkg.dependencies?.["@webhook-portal/cli"] !== "workspace:*") {
+      failures.push(
+        `${pkg.name}: wrapper must depend on @webhook-portal/cli via workspace:*`,
+      );
+    }
+    if (Object.keys(pkg.dependencies ?? {}).length !== 1) {
+      failures.push(
+        `${pkg.name}: wrapper runtime dependencies must contain only @webhook-portal/cli`,
+      );
+    }
+  } catch (error) {
+    failures.push(`${referenceAppPath}: ${error.message}`);
+  }
+}
+
 async function check() {
   const manifest = await loadManifest();
   const failures = [];
   const packageNames = new Set();
   const packagePaths = new Set();
-  const imageNames = new Set();
-  const imagePaths = new Set();
-  const imageDockerfiles = new Set();
+  const manifestKeys = Object.keys(manifest).sort();
 
+  if (
+    !sameValues(manifestKeys, [
+      "openPackages",
+      "releaseStatus",
+      "schemaVersion",
+    ])
+  ) {
+    failures.push(
+      "release manifest may contain only schemaVersion, releaseStatus, and openPackages",
+    );
+  }
   if (manifest.releaseStatus !== "unreleased") {
     failures.push(
       "releaseStatus must remain unreleased until an actual release is approved",
     );
   }
-  if (manifest.openPackages.length !== 9) {
+  if (
+    !Array.isArray(manifest.openPackages) ||
+    manifest.openPackages.length !== publicPackageCount
+  ) {
     failures.push(
-      "the coordinated open-package cohort must contain exactly 9 packages",
+      `the public package cohort must contain exactly ${publicPackageCount} packages`,
     );
   }
 
-  for (const entry of manifest.openPackages) {
-    if (packageNames.has(entry.name))
+  for (const entry of manifest.openPackages ?? []) {
+    if (packageNames.has(entry.name)) {
       failures.push(`duplicate package ${entry.name}`);
-    if (packagePaths.has(entry.path))
+    }
+    if (packagePaths.has(entry.path)) {
       failures.push(`duplicate package path ${entry.path}`);
+    }
     packageNames.add(entry.name);
     packagePaths.add(entry.path);
 
+    if (!entry.path.startsWith("packages/")) {
+      failures.push(`${entry.name}: release path must be under packages/`);
+    }
     if (!semverPattern.test(entry.version)) {
       failures.push(`${entry.name}: invalid release version ${entry.version}`);
     }
@@ -90,19 +158,24 @@ async function check() {
       const pkg = await packageManifest(entry);
       if (pkg.name !== entry.name)
         failures.push(`${entry.path}: name mismatch`);
-      if (pkg.version !== entry.version)
+      if (pkg.version !== entry.version) {
         failures.push(`${entry.name}: version mismatch`);
-      if (pkg.private === true)
+      }
+      if (pkg.private === true) {
         failures.push(`${entry.name}: release package is private`);
-      if (pkg.license !== "Apache-2.0")
+      }
+      if (pkg.license !== "Apache-2.0") {
         failures.push(`${entry.name}: license must be Apache-2.0`);
+      }
       if (pkg.publishConfig?.access !== "public") {
         failures.push(`${entry.name}: publishConfig.access must be public`);
       }
-      if (pkg.engines?.node !== ">=22")
+      if (pkg.engines?.node !== ">=22") {
         failures.push(`${entry.name}: Node engine mismatch`);
-      if (!pkg.exports && !pkg.bin)
+      }
+      if (!pkg.exports && !pkg.bin) {
         failures.push(`${entry.name}: no exports or bin`);
+      }
       if (!Array.isArray(pkg.files) || pkg.files.length === 0) {
         failures.push(`${entry.name}: package files allowlist is missing`);
       }
@@ -112,12 +185,13 @@ async function check() {
   }
 
   const cohortVersions = new Set(
-    manifest.openPackages.map((entry) => entry.version),
+    (manifest.openPackages ?? []).map((entry) => entry.version),
   );
   if (cohortVersions.size !== 1) {
-    failures.push("all coordinated open packages must use one release version");
+    failures.push("all public packages must use one coordinated version");
   }
-  for (const entry of manifest.openPackages) {
+
+  for (const entry of manifest.openPackages ?? []) {
     try {
       const pkg = await packageManifest(entry);
       const runtimeDependencies = {
@@ -129,7 +203,7 @@ async function check() {
         if (!dependency.startsWith("@webhook-portal/")) continue;
         if (!packageNames.has(dependency)) {
           failures.push(
-            `${entry.name}: public runtime dependency ${dependency} is outside the coordinated cohort`,
+            `${entry.name}: public runtime dependency ${dependency} is outside the release cohort`,
           );
         }
         if (!String(range).startsWith("workspace:")) {
@@ -139,127 +213,19 @@ async function check() {
         }
       }
     } catch {
-      // The primary manifest check reports the file error.
+      // The primary package metadata check reports the file error.
     }
   }
 
-  for (const entry of manifest.deferredOpenPackages ?? []) {
-    try {
-      const pkg = await packageManifest(entry);
-      if (pkg.name !== entry.name)
-        failures.push(`${entry.path}: deferred name mismatch`);
-      if (pkg.private === true || pkg.license !== "Apache-2.0") {
-        failures.push(
-          `${entry.name}: deferred open package metadata is inconsistent`,
-        );
-      }
-      if (!entry.reason)
-        failures.push(`${entry.name}: deferral reason is required`);
-    } catch (error) {
-      failures.push(`${entry.path}: ${error.message}`);
-    }
-  }
-
-  const declaredOpenPaths = new Set([
-    ...manifest.openPackages.map((entry) => entry.path),
-    ...(manifest.deferredOpenPackages ?? []).map((entry) => entry.path),
-  ]);
-  for (const directory of await readdir(path.join(root, "packages"), {
-    withFileTypes: true,
-  })) {
-    if (!directory.isDirectory()) continue;
-    const relative = `packages/${directory.name}`;
-    try {
-      const pkg = await readJson(path.join(root, relative, "package.json"));
-      if (
-        pkg.private !== true &&
-        pkg.publishConfig?.access === "public" &&
-        !declaredOpenPaths.has(relative)
-      ) {
-        failures.push(
-          `${pkg.name}: public package must be in the release cohort or deferred list`,
-        );
-      }
-    } catch {
-      // Non-workspace directories are ignored.
-    }
-  }
-
-  const expectedPrivateImages = ["control-plane-api", "portal", "worker"];
-  if (
-    manifest.privateImages.length !== expectedPrivateImages.length ||
-    expectedPrivateImages.some(
-      (name) => !manifest.privateImages.some((image) => image.name === name),
-    )
-  ) {
+  const actualPaths = await publicPackagePaths();
+  const declaredPaths = [...packagePaths].sort();
+  if (!sameValues(actualPaths, declaredPaths)) {
     failures.push(
-      "privateImages must contain exactly control-plane-api, worker, and portal",
+      `release package paths must match packages/: expected ${actualPaths.join(", ")}`,
     );
   }
-  for (const image of manifest.privateImages) {
-    if (imageNames.has(image.name))
-      failures.push(`duplicate private image ${image.name}`);
-    if (imagePaths.has(image.packagePath))
-      failures.push(
-        `duplicate private image package path ${image.packagePath}`,
-      );
-    if (imageDockerfiles.has(image.dockerfile))
-      failures.push(`duplicate private image Dockerfile ${image.dockerfile}`);
-    imageNames.add(image.name);
-    imagePaths.add(image.packagePath);
-    imageDockerfiles.add(image.dockerfile);
-    if (!semverPattern.test(image.version)) {
-      failures.push(`${image.name}: invalid image version ${image.version}`);
-    }
-    if (image.digest !== null && !/^sha256:[a-f0-9]{64}$/u.test(image.digest)) {
-      failures.push(`${image.name}: invalid immutable image digest`);
-    }
-    if (manifest.releaseStatus === "unreleased" && image.digest !== null) {
-      failures.push(`${image.name}: unreleased image digest must remain null`);
-    }
-    try {
-      const pkg = await readJson(
-        path.join(root, image.packagePath, "package.json"),
-      );
-      const dockerfile = await readFile(
-        path.join(root, image.dockerfile),
-        "utf8",
-      );
-      if (pkg.version !== image.version)
-        failures.push(`${image.name}: image/package version mismatch`);
-      if (pkg.private !== true || pkg.license !== "UNLICENSED") {
-        failures.push(
-          `${image.name}: private image package metadata is inconsistent`,
-        );
-      }
-      if (image.status !== "engineering-pilot-only") {
-        failures.push(
-          `${image.name}: image status must remain engineering-pilot-only`,
-        );
-      }
-      const expectedLabels = {
-        "org.opencontainers.image.version": image.version,
-        "org.opencontainers.image.revision": "source-revision-required",
-        "org.opencontainers.image.licenses": "UNLICENSED",
-      };
-      if (JSON.stringify(image.ociLabels) !== JSON.stringify(expectedLabels)) {
-        failures.push(`${image.name}: OCI label metadata is inconsistent`);
-      }
-      for (const marker of [
-        "WEBHOOK_PORTAL_IMAGE_VERSION",
-        "WEBHOOK_PORTAL_SOURCE_REVISION",
-        "org.opencontainers.image.version",
-        "org.opencontainers.image.revision",
-        "org.opencontainers.image.licenses",
-      ]) {
-        if (!dockerfile.includes(marker)) {
-          failures.push(`${image.name}: Dockerfile is missing ${marker}`);
-        }
-      }
-    } catch (error) {
-      failures.push(`${image.name}: ${error.message}`);
-    }
-  }
+
+  await checkReferenceApp(failures);
 
   const changelog = await readFile(path.join(root, "CHANGELOG.md"), "utf8");
   if (!changelog.includes("## [Unreleased]")) {
@@ -271,32 +237,13 @@ async function check() {
     );
   }
 
-  const requiredDocs = [
-    "docs/launch/README.md",
-    "docs/launch/release-and-versioning.md",
-    "docs/launch/packaging-and-pricing.md",
-    "docs/launch/acquisition-and-content.md",
-    "docs/launch/analytics.md",
-    "docs/launch/extension-distribution.md",
-    "docs/launch/claims-and-comparisons.md",
-    "docs/launch/support-and-communications.md",
-    ".github/RELEASE_TEMPLATE.md",
-  ];
-  for (const relative of requiredDocs) {
-    try {
-      await access(path.join(root, relative));
-    } catch {
-      failures.push(`${relative}: required launch document is missing`);
-    }
-  }
-
   if (failures.length > 0) {
     throw new Error(
       `Release consistency failures:\n- ${failures.join("\n- ")}`,
     );
   }
   console.log(
-    "Release manifest, package metadata, changelog, images, and launch docs are consistent.",
+    "All 13 public packages and the private Apache-2.0 reference wrapper are release-consistent.",
   );
 }
 
@@ -360,10 +307,10 @@ function sbomFor(pkg, checksum) {
     dataLicense: "CC0-1.0",
     SPDXID: "SPDXRef-DOCUMENT",
     name: `${pkg.name}-${pkg.version}`,
-    documentNamespace: `urn:webhook-portal:sbom:${encodeURIComponent(pkg.name)}:${pkg.version}:${checksum}`,
+    documentNamespace: `urn:hookship-toolkit:sbom:${encodeURIComponent(pkg.name)}:${pkg.version}:${checksum}`,
     creationInfo: {
       created: new Date().toISOString(),
-      creators: ["Tool: webhook-portal-release-script"],
+      creators: ["Tool: hookship-toolkit-release-script"],
     },
     packages: [
       {
@@ -450,7 +397,7 @@ async function buildArtifacts({ publishDryRun }) {
       predicateType: "https://slsa.dev/provenance/v1",
       predicate: {
         buildDefinition: {
-          buildType: "urn:webhook-portal:release-script:v1",
+          buildType: "urn:hookship-toolkit:release-script:v1",
           externalParameters: { package: entry.name, version: entry.version },
           internalParameters: {
             gitCommit: commit,
@@ -461,7 +408,7 @@ async function buildArtifacts({ publishDryRun }) {
           ],
         },
         runDetails: {
-          builder: { id: "urn:webhook-portal:local-release-script" },
+          builder: { id: "urn:hookship-toolkit:local-release-script" },
           metadata: { invocationId: null },
         },
       },
@@ -488,35 +435,12 @@ async function buildArtifacts({ publishDryRun }) {
     }
   }
 
-  const imageCandidates = await Promise.all(
-    manifest.privateImages.map(async (image) => ({
-      name: image.name,
-      version: image.version,
-      status: image.status,
-      dockerfile: image.dockerfile,
-      dockerfileSha256: await sha256File(path.join(root, image.dockerfile)),
-      digest: image.digest,
-      ociLabels: {
-        ...image.ociLabels,
-        "org.opencontainers.image.revision": commit ?? "unknown",
-      },
-    })),
-  );
-  const imageMetadata = path.join(metadataRoot, "private-images.json");
-  await writeFile(
-    imageMetadata,
-    `${JSON.stringify(imageCandidates, null, 2)}\n`,
-  );
-  checksumLines.push(
-    `${await sha256File(imageMetadata)}  ${path.relative(workRoot, imageMetadata)}`,
-  );
-
   await writeFile(
     path.join(workRoot, "SHA256SUMS"),
     `${checksumLines.join("\n")}\n`,
   );
   console.log(
-    `Release package and private image candidate artifacts verified in ${path.relative(root, workRoot)}/`,
+    `Release package artifacts verified in ${path.relative(root, workRoot)}/`,
   );
 }
 

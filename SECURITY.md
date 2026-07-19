@@ -32,3 +32,11 @@ accessing data that is not yours, disrupting services, or expanding testing
 beyond what is needed to demonstrate the issue.
 
 For normal bugs and usage questions, follow [`SUPPORT.md`](SUPPORT.md).
+
+## Repository secret scanning
+
+`pnpm check:secrets` runs both the current-tree high-confidence hygiene scanner
+and Gitleaks across the complete Git history. The narrow allowlists in
+`.gitleaks.toml` combine an exact file path, exact deterministic test value, and
+the specific Gitleaks rule. They do not allow whole test directories, commits,
+or generic secret formats.

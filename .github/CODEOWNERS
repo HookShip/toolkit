@@ -1,0 +1,9 @@
+* @HookShip/maintainers
+
+/.github/ @HookShip/maintainers @HookShip/security
+/.gitleaks.toml @HookShip/maintainers @HookShip/security
+/SECURITY.md @HookShip/security
+/infra/ @HookShip/maintainers @HookShip/security
+/packages/adapter-sdk/ @HookShip/maintainers @HookShip/security
+/packages/signing/ @HookShip/maintainers @HookShip/security
+/scripts/release.mjs @HookShip/maintainers @HookShip/security

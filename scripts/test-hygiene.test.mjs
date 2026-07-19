@@ -7,31 +7,20 @@ import test from "node:test";
 
 const root = path.resolve(import.meta.dirname, "..");
 const expectedTestWorkspaces = [
-  "apps/control-plane-api",
-  "apps/portal-web",
   "apps/reference-server",
-  "apps/worker",
   "packages/adapter-conformance",
   "packages/adapter-generic-http",
-  "packages/adapter-hookdeck",
   "packages/adapter-sdk",
-  "packages/adapter-svix",
-  "packages/billing",
   "packages/canonical-model",
   "packages/cli",
   "packages/compatibility-report",
   "packages/contract-core",
-  "packages/db",
   "packages/extension-conformance",
-  "packages/extension-registry",
   "packages/extension-sdk",
-  "packages/kms",
-  "packages/metering",
   "packages/migration-assessment",
   "packages/portal-components",
   "packages/signing",
   "packages/support-evidence",
-  "packages/tenancy",
 ];
 const testFilePattern = /\.(?:spec|test)\.[cm]?[jt]sx?$/u;
 
@@ -64,11 +53,7 @@ test("the test-bearing workspace inventory is explicit", async () => {
     ...(await workspaceDirectories("apps")),
     ...(await workspaceDirectories("packages")),
   ].sort();
-  assert.deepEqual(
-    actual,
-    expectedTestWorkspaces,
-    "Classify every new workspace explicitly instead of allowing a silent testless scaffold.",
-  );
+  assert.deepEqual(actual, expectedTestWorkspaces);
 });
 
 test("no package script masks a missing Vitest suite", async () => {

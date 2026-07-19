@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: Apache-2.0
 #
-# Packs every implemented publishable package with `pnpm pack` and verifies the package
+# Packs all 13 public packages with `pnpm pack` and verifies the package
 # that a real `npm install` would actually produce, independent of the
 # in-workspace build tree:
 #   - LICENSE, README, and package.json are present (LICENSE is injected
@@ -12,7 +12,7 @@
 #   - every file referenced by "exports"/"types"/"bin" in the packed
 #     package.json actually exists in the tarball.
 #
-# It then installs all tarballs together into a throwaway npm project with no
+# It then installs all tarballs together into an isolated npm project with no
 # workspace/monorepo context, imports every public entry point, and invokes the
 # packed CLI binary. Installing the complete release set at once lets npm
 # satisfy internal @webhook-portal dependencies from the local tarballs,
@@ -26,18 +26,6 @@ PACKAGES=()
 while IFS= read -r package_dir; do
   PACKAGES+=("$package_dir")
 done < <(node scripts/release.mjs list-packages)
-
-# These public learning-feature packages are independently publishable and must
-# pass the same tarball/install contract even before the coordinated release
-# manifest is expanded.
-for package_dir in \
-  packages/compatibility-report \
-  packages/migration-assessment \
-  packages/support-evidence; do
-  if [[ ! " ${PACKAGES[*]} " =~ " ${package_dir} " ]]; then
-    PACKAGES+=("$package_dir")
-  fi
-done
 
 WORKDIR="$ROOT/.pack-smoke-work"
 cleanup() {
@@ -169,6 +157,7 @@ mkdir -p "$install_dir"
       "@webhook-portal/compatibility-report",
       "@webhook-portal/migration-assessment",
       "@webhook-portal/support-evidence",
+      "@webhook-portal/portal-components",
       "@webhook-portal/cli",
       "@webhook-portal/cli/reference-server",
     ];

@@ -1,4 +1,4 @@
-name: webhook-portal-local
+name: hookship-toolkit-local
 
 x-reference-environment: &reference-environment
   DATABASE_URL: ${DATABASE_URL:?Run ./infra/setup.sh}
@@ -78,7 +78,7 @@ services:
     restart: unless-stopped
 
   migration:
-    image: webhook-portal-reference:local
+    image: hookship-toolkit-reference:local
     build:
       context: ..
       dockerfile: infra/Dockerfile
@@ -94,7 +94,7 @@ services:
     restart: "no"
 
   app:
-    image: webhook-portal-reference:local
+    image: hookship-toolkit-reference:local
     build:
       context: ..
       dockerfile: infra/Dockerfile
@@ -134,7 +134,7 @@ services:
   integration-tests:
     profiles:
       - integration
-    image: webhook-portal-reference-build:local
+    image: hookship-toolkit-reference-build:local
     build:
       context: ..
       dockerfile: infra/Dockerfile

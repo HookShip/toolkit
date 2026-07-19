@@ -12,7 +12,7 @@ const extensionAssetRoots = [
   path.join(root, "examples", "extensions"),
 ];
 
-export const openPackageDirectories = new Set([
+export const publicPackageDirectories = new Set([
   "adapter-conformance",
   "adapter-generic-http",
   "adapter-sdk",
@@ -28,24 +28,7 @@ export const openPackageDirectories = new Set([
   "support-evidence",
 ]);
 
-export const cloudPackageDirectories = new Set([
-  "adapter-hookdeck",
-  "adapter-svix",
-  "billing",
-  "db",
-  "extension-registry",
-  "kms",
-  "metering",
-  "tenancy",
-]);
-
-export const openAppDirectories = new Set(["reference-server"]);
-
-export const cloudAppDirectories = new Set([
-  "control-plane-api",
-  "portal-web",
-  "worker",
-]);
+export const privateAppDirectories = new Set(["reference-server"]);
 
 const sourceExtensions = new Set([
   ".cjs",
@@ -61,26 +44,18 @@ const importPattern =
   /\b(?:import|export)\s+(?:[\s\S]*?\s+from\s+)?["']([^"']+)["']|\brequire\(\s*["']([^"']+)["']\s*\)|\bimport\(\s*["']([^"']+)["']\s*\)/g;
 
 export function workspaceKind(area, directoryName) {
-  if (area === "packages") {
-    if (openPackageDirectories.has(directoryName)) return "open-package";
-    if (cloudPackageDirectories.has(directoryName)) return "cloud-package";
+  if (area === "packages" && publicPackageDirectories.has(directoryName)) {
+    return "public-package";
   }
-  if (area === "apps") {
-    if (openAppDirectories.has(directoryName)) return "open-app";
-    if (cloudAppDirectories.has(directoryName)) return "cloud-app";
+  if (area === "apps" && privateAppDirectories.has(directoryName)) {
+    return "private-app";
   }
   return undefined;
 }
 
 export function isAllowedDirection(fromKind, toKind) {
-  if (fromKind === "open-package") return toKind === "open-package";
-  if (fromKind === "cloud-package") {
-    return toKind === "cloud-package" || toKind === "open-package";
-  }
-  if (fromKind === "open-app") return toKind === "open-package";
-  if (fromKind === "cloud-app") {
-    return toKind === "cloud-package" || toKind === "open-package";
-  }
+  if (fromKind === "public-package") return toKind === "public-package";
+  if (fromKind === "private-app") return toKind === "public-package";
   return false;
 }
 
@@ -112,8 +87,8 @@ function isWithin(directory, candidate) {
   );
 }
 
-export function isOpenCoreExtensionAssetTarget(kind, candidate) {
-  if (kind !== "open-package" && kind !== "open-app") return false;
+export function isToolkitExtensionAssetTarget(kind, candidate) {
+  if (kind !== "public-package" && kind !== "private-app") return false;
   return extensionAssetRoots.some((directory) =>
     isWithin(directory, candidate),
   );
@@ -175,16 +150,36 @@ function importedSpecifiers(source) {
 
 function targetFromRelativeImport(file, specifier, workspacesByPath) {
   const resolved = path.resolve(path.dirname(file), specifier);
-  for (const workspace of workspacesByPath) {
-    const relative = path.relative(workspace.directory, resolved);
-    if (
-      relative === "" ||
-      (!relative.startsWith("..") && !path.isAbsolute(relative))
-    ) {
-      return workspace;
+  return workspacesByPath.find((workspace) =>
+    isWithin(workspace.directory, resolved),
+  );
+}
+
+function validateManifest(workspace, violations) {
+  const { kind, manifest } = workspace;
+  if (manifest.license !== "Apache-2.0") {
+    violations.push(`${manifest.name}: license must be Apache-2.0`);
+  }
+  if (kind === "public-package") {
+    if (manifest.private === true) {
+      violations.push(`${manifest.name}: public packages must not be private`);
+    }
+    if (manifest.publishConfig?.access !== "public") {
+      violations.push(
+        `${manifest.name}: public packages must set publishConfig.access=public`,
+      );
     }
   }
-  return undefined;
+  if (kind === "private-app") {
+    if (manifest.private !== true) {
+      violations.push(`${manifest.name}: app wrappers must set private=true`);
+    }
+    if (manifest.publishConfig !== undefined) {
+      violations.push(
+        `${manifest.name}: private app wrappers must not declare publishConfig`,
+      );
+    }
+  }
 }
 
 export async function checkBoundaries() {
@@ -200,31 +195,17 @@ export async function checkBoundaries() {
       const kind = workspaceKind(area, directoryName);
       if (!kind) {
         violations.push(
-          `${area}/${directoryName}: workspace is not assigned to an open or cloud boundary`,
+          `${area}/${directoryName}: workspace is not part of the public toolkit inventory`,
         );
         continue;
       }
       const workspace = { area, directory, directoryName, kind, manifest };
       workspaces.push(workspace);
-      workspaceByName.set(manifest.name, workspace);
-
-      if (kind === "cloud-package" || kind === "cloud-app") {
-        if (manifest.private !== true) {
-          violations.push(
-            `${manifest.name}: commercial workspaces must set private=true`,
-          );
-        }
-        if (manifest.license !== "UNLICENSED") {
-          violations.push(
-            `${manifest.name}: commercial workspaces must use license=UNLICENSED`,
-          );
-        }
-        if (manifest.webhookPortal?.distribution !== "commercial") {
-          violations.push(
-            `${manifest.name}: commercial workspaces must declare webhookPortal.distribution=commercial`,
-          );
-        }
+      if (workspaceByName.has(manifest.name)) {
+        violations.push(`${manifest.name}: duplicate workspace package name`);
       }
+      workspaceByName.set(manifest.name, workspace);
+      validateManifest(workspace, violations);
     }
   }
 
@@ -240,7 +221,7 @@ export async function checkBoundaries() {
       const target = workspaceByName.get(dependencyName);
       if (!target) {
         violations.push(
-          `${workspace.manifest.name}: unknown workspace dependency ${dependencyName}`,
+          `${workspace.manifest.name}: unknown toolkit dependency ${dependencyName}`,
         );
       } else if (
         !isAllowedWorkspaceDependency(
@@ -267,9 +248,9 @@ export async function checkBoundaries() {
 
         if (specifier.startsWith(".")) {
           const resolved = path.resolve(path.dirname(file), specifier);
-          if (isOpenCoreExtensionAssetTarget(workspace.kind, resolved)) {
+          if (isToolkitExtensionAssetTarget(workspace.kind, resolved)) {
             violations.push(
-              `${relativeFile}: open core must not import extension data assets ${specifier}`,
+              `${relativeFile}: toolkit workspaces must not import extension data assets ${specifier}`,
             );
             continue;
           }
@@ -279,7 +260,7 @@ export async function checkBoundaries() {
           target = workspaceByName.get(dependencyName);
           if (!target) {
             violations.push(
-              `${relativeFile}: unknown workspace import ${dependencyName}`,
+              `${relativeFile}: unknown toolkit import ${dependencyName}`,
             );
             continue;
           }
