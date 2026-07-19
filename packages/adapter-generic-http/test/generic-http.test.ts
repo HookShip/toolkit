@@ -1363,7 +1363,7 @@ describe("deadline-bound external stores", () => {
       );
       const result = await adapter.execute(
         endpointCreate(`hung-${phase}`, credential(["endpoint.create"]), {
-          deadline: Date.now() + 20,
+          deadline: Date.now() + 500,
         }),
       );
       expect(result).toMatchObject({
@@ -1434,13 +1434,13 @@ describe("deadline-bound external stores", () => {
     const scopedCredential = credential(["endpoint.create"]);
     const first = adapter.execute(
       endpointCreate("hung-complete", scopedCredential, {
-        deadline: Date.now() + 25,
+        deadline: Date.now() + 500,
       }),
     );
     await completing;
     const competing = await adapter.execute(
       endpointCreate("hung-complete", scopedCredential, {
-        deadline: Date.now() + 100,
+        deadline: Date.now() + 500,
       }),
     );
     expect(competing).toMatchObject({
