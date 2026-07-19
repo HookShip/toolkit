@@ -2583,21 +2583,24 @@ describe("operation-aware timeout policy", () => {
         async (request) => {
           calls += 1;
           return new Promise((_resolve, reject) => {
-            request.signal.addEventListener(
-              "abort",
-              () => {
-                observedAbort = true;
-                reject(request.signal.reason);
-              },
-              { once: true },
-            );
+            let observed = false;
+            const abort = (): void => {
+              if (observed) return;
+              observed = true;
+              observedAbort = true;
+              reject(request.signal.reason);
+            };
+            request.signal.addEventListener("abort", abort, { once: true });
+            if (request.signal.aborted) {
+              abort();
+            }
           });
         },
         { idempotencyStore: store, clock: Date.now },
       ),
     );
     const result = await first.execute(
-      sendTest("send-timeout", scopedCredential, Date.now() + 20),
+      sendTest("send-timeout", scopedCredential, Date.now() + 500),
     );
     const restarted = new GenericHttpAdapter(
       baseConfig(
