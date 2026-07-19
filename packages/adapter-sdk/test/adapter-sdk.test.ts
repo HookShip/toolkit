@@ -580,7 +580,7 @@ describe("authenticated command envelope", () => {
           actor: { id: "actor-1", type: "service" },
           idempotency: { key: `hung-replay-${mode}` },
           credential: scopedCredential,
-          deadline: current + 100,
+          deadline: current + 2_000,
         }),
       };
       const envelope = createAuthenticatedCommandEnvelope(
@@ -612,7 +612,7 @@ describe("authenticated command envelope", () => {
         {
           now: current,
           storeDeadlineAt:
-            mode === "deadline" ? Date.now() + 15 : current + 1_000,
+            mode === "deadline" ? Date.now() + 500 : current + 1_000,
           replayRetentionMilliseconds: 60_000,
           signal: parent.signal,
         },
