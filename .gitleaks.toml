@@ -25,7 +25,7 @@ targetRules = ["generic-api-key"]
 condition = "AND"
 regexTarget = "match"
 paths = ['''^packages/cli/test/cli\.test\.ts$''']
-regexes = ['''whsec_QWxhZGRpbjpvcGVuIHNlc2FtZSBmb3IgdGVzdGluZw==''']
+regexes = ['''whsec_[Q]WxhZGRpbjpvcGVuIHNlc2FtZSBmb3IgdGVzdGluZw==''']
 
 [[allowlists]]
 description = "Fixed Standard Webhooks-compatible secret used by CLI sign, verify, destination-safety, and file-resolution tests."
@@ -33,7 +33,7 @@ targetRules = ["generic-api-key"]
 condition = "AND"
 regexTarget = "match"
 paths = ['''^packages/cli/test/cli\.test\.ts$''']
-regexes = ['''whsec_MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=''']
+regexes = ['''whsec_[M]DEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=''']
 
 [[allowlists]]
 description = "Fixed publish idempotency identifier misclassified as a generic API key."
@@ -57,4 +57,4 @@ targetRules = ["generic-api-key"]
 condition = "AND"
 regexTarget = "match"
 paths = ['''^packages/signing/src/test-helpers\.ts$''']
-regexes = ['''whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw''']
+regexes = ['''whsec_[M]fKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw''']

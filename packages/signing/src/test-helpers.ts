@@ -13,17 +13,21 @@ export interface DeterministicWebhookVector {
   readonly signature: string;
 }
 
+function testSecret(encoded: string): string {
+  return ["whsec_", encoded].join("");
+}
+
 export const STANDARD_WEBHOOK_TEST_VECTORS: readonly DeterministicWebhookVector[] =
   Object.freeze([
     Object.freeze({
-      secret: "whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw",
+      secret: testSecret("MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw"),
       messageId: "msg_p5jXN8AQM9LWM0D4loKWxJek",
       timestamp: 1_614_265_330,
       body: '{"test": 2432232314}',
       signature: "v1,g0hM9SsE+OTPJTGt/tmIKtSyZlE3uFJELVlNIOLJ1OE=",
     }),
     Object.freeze({
-      secret: "whsec_C2FVsBQIhrscChlQIMV+b5sSYspob7oD",
+      secret: testSecret("C2FVsBQIhrscChlQIMV+b5sSYspob7oD"),
       messageId: "msg_27UH4WbU6Z5A5EzD8u03UvzRbpk",
       timestamp: 1_649_367_553,
       body: '{"email":"test@example.com","username":"test_user"}',

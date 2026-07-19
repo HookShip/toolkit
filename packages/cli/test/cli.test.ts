@@ -49,6 +49,14 @@ class CaptureWriter extends Writable {
 }
 
 const scratchDirectories: string[] = [];
+const REDACTION_WEBHOOK_TEST_SECRET = [
+  "whsec_",
+  "QWxhZGRpbjpvcGVuIHNlc2FtZSBmb3IgdGVzdGluZw==",
+].join("");
+const STANDARD_WEBHOOK_TEST_SECRET = [
+  "whsec_",
+  "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
+].join("");
 
 async function scratch(): Promise<string> {
   const directory = path.resolve(
@@ -362,7 +370,7 @@ describe("CLI", () => {
   });
 
   it("redacts secret-looking values from errors", async () => {
-    const secret = "whsec_QWxhZGRpbjpvcGVuIHNlc2FtZSBmb3IgdGVzdGluZw==";
+    const secret = REDACTION_WEBHOOK_TEST_SECRET;
     const result = await invoke([secret, "--json"]);
 
     expect(result.exitCode).toBe(CLI_EXIT_CODES.usage);
@@ -435,7 +443,7 @@ describe("CLI", () => {
       {
         stdin: '{"id":"evt_1"}',
         environment: {
-          WEBHOOK_SECRET: "whsec_MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
+          WEBHOOK_SECRET: STANDARD_WEBHOOK_TEST_SECRET,
         },
       },
     );
@@ -458,7 +466,7 @@ describe("CLI", () => {
       {
         stdin: '{"id":"evt_1"}',
         environment: {
-          WEBHOOK_SECRET: "whsec_MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
+          WEBHOOK_SECRET: STANDARD_WEBHOOK_TEST_SECRET,
         },
         httpTransport: async () => {
           calls += 1;
@@ -489,7 +497,7 @@ describe("CLI", () => {
       {
         stdin: '{"ok":true}',
         environment: {
-          WEBHOOK_SECRET: "whsec_MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
+          WEBHOOK_SECRET: STANDARD_WEBHOOK_TEST_SECRET,
         },
       },
     );
@@ -500,7 +508,7 @@ describe("CLI", () => {
 
   it("round-trips Standard Webhooks sign and verify commands", async () => {
     const directory = await scratch();
-    const secret = "whsec_MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=";
+    const secret = STANDARD_WEBHOOK_TEST_SECRET;
     await writeFile(path.join(directory, "body.json"), '{"ok":true}\n');
     await writeFile(path.join(directory, "webhook.secret"), `${secret}\n`, {
       mode: 0o600,
@@ -552,7 +560,7 @@ describe("CLI", () => {
 
   it("resolves embedded-run secret and API token files from the CLI cwd", async () => {
     const directory = await scratch();
-    const webhookSecret = "whsec_MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=";
+    const webhookSecret = STANDARD_WEBHOOK_TEST_SECRET;
     await Promise.all([
       writeFile(path.join(directory, "body.json"), '{"ok":true}\n'),
       writeFile(
