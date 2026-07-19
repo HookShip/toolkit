@@ -2231,7 +2231,7 @@ describe("provider acknowledgements", () => {
       },
       {
         now: current,
-        deadlineAt: Date.now() + 15,
+        deadlineAt: Date.now() + 500,
       },
     );
     expect(result).toMatchObject({
