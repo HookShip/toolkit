@@ -33,6 +33,16 @@ jobs:
       - run: corepack enable
       - run: pnpm install --frozen-lockfile
       - run: pnpm check
+      - name: Enforce isolated contract parser performance budgets
+        env:
+          CI_PERFORMANCE: "true"
+        run: >-
+          pnpm --filter @webhook-portal/contract-core exec vitest run
+          test/security.test.ts --maxWorkers=1 --fileParallelism=false
+          --testTimeout=15000 --hookTimeout=15000 -t "bounds
+          repeated-reference|indexes many anchors|fails fast on adversarial
+          AsyncAPI|preserves but does not evaluate user regexes|skips quadratic
+          uniqueItems"
 
   coverage:
     name: Coverage

@@ -12,6 +12,11 @@ import {
   type JsonValue,
 } from "../src/index.js";
 
+function timingBudget(localMilliseconds: number, ciMilliseconds: number) {
+  if (process.env["CI_PERFORMANCE"] === "true") return ciMilliseconds;
+  return process.env["CI"] === "true" ? undefined : localMilliseconds;
+}
+
 function minimalOpenApi(extra: JsonObject = {}): JsonObject {
   return {
     ...extra,
@@ -233,7 +238,10 @@ describe("parser resource and object safety", () => {
         maxValidationOperations: 100_000,
       },
     });
-    expect(performance.now() - started).toBeLessThan(1_000);
+    const timingBudgetMs = timingBudget(1_000, 3_000);
+    if (timingBudgetMs !== undefined) {
+      expect(performance.now() - started).toBeLessThan(timingBudgetMs);
+    }
     expect(bytesLimited.status).toBe("invalid");
     expect(bytesLimited.contract).toBeUndefined();
     expect(bytesLimited.diagnostics).toContainEqual(
@@ -313,9 +321,10 @@ describe("parser resource and object safety", () => {
       },
     });
     expect(result.status).toBe("valid");
-    // Shared CI runners can be CPU constrained; structural work limits below remain unchanged.
-    const timingBudgetMilliseconds = process.env.CI === "true" ? 15_000 : 5_000;
-    expect(performance.now() - started).toBeLessThan(timingBudgetMilliseconds);
+    const timingBudgetMs = timingBudget(5_000, 10_000);
+    if (timingBudgetMs !== undefined) {
+      expect(performance.now() - started).toBeLessThan(timingBudgetMs);
+    }
 
     const limited = importContract(source, {
       limits: {
@@ -371,8 +380,10 @@ describe("parser resource and object safety", () => {
     expect(result.status).toBe("invalid");
     expect(result.diagnostics.length).toBeLessThanOrEqual(8);
     expect(result.diagnostics[0]?.code).toBe("ASYNCAPI_DOCUMENT_INVALID");
-    const timingBudgetMs = process.env["CI"] === "true" ? 3_000 : 1_000;
-    expect(performance.now() - started).toBeLessThan(timingBudgetMs);
+    const timingBudgetMs = timingBudget(1_000, 3_000);
+    if (timingBudgetMs !== undefined) {
+      expect(performance.now() - started).toBeLessThan(timingBudgetMs);
+    }
   });
 
   it("enforces event counts and rejects external schema documents", () => {
@@ -552,7 +563,10 @@ webhooks: {}
     expect(
       result.contract?.eventTypes[0]?.versions[0]?.schema.value,
     ).toMatchObject({ pattern: "^(a|aa)+$" });
-    expect(elapsed).toBeLessThan(1_000);
+    const timingBudgetMs = timingBudget(1_000, 3_000);
+    if (timingBudgetMs !== undefined) {
+      expect(elapsed).toBeLessThan(timingBudgetMs);
+    }
 
     media["schema"] = {
       additionalProperties: false,
@@ -645,7 +659,10 @@ webhooks: {}
 
     const started = performance.now();
     const result = importContract(encoded, { formatHint: "json" });
-    expect(performance.now() - started).toBeLessThan(1_000);
+    const timingBudgetMs = timingBudget(1_000, 3_000);
+    if (timingBudgetMs !== undefined) {
+      expect(performance.now() - started).toBeLessThan(timingBudgetMs);
+    }
     expect(result.status).toBe("partial");
     expect(result.diagnostics).toContainEqual(
       expect.objectContaining({ code: "UNIQUE_ITEMS_NOT_EVALUATED" }),
