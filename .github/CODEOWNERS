@@ -6,4 +6,5 @@
 /infra/ @HookShip/maintainers @HookShip/security
 /packages/adapter-sdk/ @HookShip/maintainers @HookShip/security
 /packages/signing/ @HookShip/maintainers @HookShip/security
+/release/ @HookShip/maintainers @HookShip/security
 /scripts/release.mjs @HookShip/maintainers @HookShip/security

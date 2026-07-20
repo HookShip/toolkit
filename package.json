@@ -23,6 +23,8 @@
     "release:artifacts": "node scripts/release.mjs artifacts",
     "release:clean": "node scripts/release.mjs clean",
     "release:dry-run": "node scripts/release.mjs dry-run",
+    "release:prepare": "node scripts/release.mjs prepare",
+    "release:publish": "node scripts/release.mjs publish",
     "smoke": "pnpm build && node scripts/smoke.mjs",
     "test": "pnpm test:required",
     "test:coverage": "node scripts/test-coverage.mjs",
@@ -31,6 +33,7 @@
     "test:integration:reference": "pnpm --filter @webhook-portal/cli test:integration",
     "test:live:reference": "docker compose --profile integration --env-file infra/.env -f infra/docker-compose.yml run --rm --build integration-tests",
     "test:required": "pnpm test:hygiene && turbo run test && pnpm test:extensions",
+    "test:verdaccio": "node scripts/verdaccio-harness.mjs",
     "typecheck": "turbo run typecheck"
   },
   "devDependencies": {

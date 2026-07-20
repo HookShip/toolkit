@@ -1,0 +1,105 @@
+name: Release
+
+# Tag- and approval-driven publish of the coordinated @webhook-portal cohort.
+#
+# Pushing a `vX.Y.Z` tag runs every existing gate (verify job) and then, only
+# after the protected `release` environment is approved, packs artifacts,
+# publishes the packages in dependency order with npm provenance, and attaches
+# the release assets. `workflow_dispatch` runs the gates plus a non-mutating
+# publish plan and never publishes.
+#
+# No npm token is committed. Publishing uses OIDC provenance (id-token: write);
+# if the registry requires classic auth, NODE_AUTH_TOKEN is read from the
+# protected environment's `NPM_TOKEN` secret at publish time only. Execution is
+# gated by the `release` environment, so nothing publishes without approval.
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify release gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.23.1
+          package-manager-cache: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: 1.26.5
+          cache: false
+      - name: Install gitleaks
+        run: go install github.com/zricethezav/gitleaks/v8@v8.30.1
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check
+      - run: pnpm smoke
+      - run: pnpm pack:smoke
+      - run: pnpm release:dry-run
+      - name: Publish plan (no packages published)
+        run: node scripts/release.mjs publish
+      - name: Clean release artifacts
+        if: always()
+        run: pnpm release:clean
+
+  release:
+    name: Publish and attach assets
+    needs: verify
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    # The `release` environment carries the required-reviewer approval and the
+    # publishing trust. Nothing below runs until that gate is satisfied.
+    environment: release
+    permissions:
+      contents: write # create the GitHub release and upload assets
+      id-token: write # OIDC provenance for `npm publish --provenance`
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.23.1
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - name: Publish the cohort in dependency order with provenance
+        # The tag must match the cohort version or this fails closed. Packing,
+        # SBOM, checksums, and provenance are produced by the publish path.
+        run: >-
+          node scripts/release.mjs publish --execute --provenance --tag
+          "${GITHUB_REF_NAME}"
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_CONFIG_PROVENANCE: "true"
+      - name: Collect release assets
+        id: assets
+        run: |
+          mkdir -p release-assets
+          find .release-work/tarballs -name '*.tgz' -exec cp {} release-assets/ \;
+          cp .release-work/SHA256SUMS release-assets/
+          cp .release-work/metadata/*.json release-assets/
+          ls -1 release-assets
+      - name: Create GitHub release and attach assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh release create "${GITHUB_REF_NAME}" --title "${GITHUB_REF_NAME}"
+          --generate-notes release-assets/*

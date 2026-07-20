@@ -5,6 +5,7 @@
 .release-work/
 .setup-lifecycle-test/
 .turbo/
+.verdaccio-work/
 coverage/
 dist/
 node_modules/

@@ -512,6 +512,463 @@ async function buildArtifacts({ publishDryRun }) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Atomic prepare / bump path
+//
+// Rewrites the cohort version everywhere it appears — the release manifest,
+// every public package.json (its own version and any pinned internal range),
+// the lockfile, and the changelog's planned-cohort line — as one all-or-nothing
+// operation. `--dry-run` prints the plan and writes nothing. When it does write,
+// it snapshots every file first and restores them if post-write verification
+// fails, so a failed bump never leaves a half-updated tree.
+// ---------------------------------------------------------------------------
+
+const releaseTypes = new Set(["major", "minor", "patch"]);
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function parseSemver(version) {
+  const match = semverPattern.exec(version);
+  if (!match) return null;
+  const dash = version.indexOf("-");
+  return {
+    major: Number(match[1]),
+    minor: Number(match[2]),
+    patch: Number(match[3]),
+    prerelease: dash === -1 ? "" : version.slice(dash + 1),
+  };
+}
+
+function compareSemver(left, right) {
+  const a = parseSemver(left);
+  const b = parseSemver(right);
+  if (!a || !b) throw new Error(`cannot compare versions ${left} and ${right}`);
+  for (const key of ["major", "minor", "patch"]) {
+    if (a[key] !== b[key]) return a[key] < b[key] ? -1 : 1;
+  }
+  if (a.prerelease === b.prerelease) return 0;
+  // A version without a prerelease outranks one with a prerelease (semver §11).
+  if (a.prerelease === "") return 1;
+  if (b.prerelease === "") return -1;
+  return a.prerelease < b.prerelease ? -1 : 1;
+}
+
+function resolveNextVersion(current, spec) {
+  if (releaseTypes.has(spec)) {
+    const parsed = parseSemver(current);
+    if (!parsed) throw new Error(`current version ${current} is not semver`);
+    if (spec === "major") return `${parsed.major + 1}.0.0`;
+    if (spec === "minor") return `${parsed.major}.${parsed.minor + 1}.0`;
+    return `${parsed.major}.${parsed.minor}.${parsed.patch + 1}`;
+  }
+  if (!semverPattern.test(spec)) {
+    throw new Error(
+      `invalid version or release type "${spec}" (expected semver or major|minor|patch)`,
+    );
+  }
+  if (compareSemver(spec, current) <= 0) {
+    throw new Error(
+      `next version ${spec} must be greater than current ${current}`,
+    );
+  }
+  return spec;
+}
+
+// Rewrites one internal dependency range to the next version, preserving the
+// range operator. `workspace:*` carries no version and is left untouched.
+function bumpDependencyRange(range, nextVersion) {
+  if (typeof range !== "string") return range;
+  const workspaceMatch = /^workspace:([\^~]?)(.+)$/.exec(range);
+  if (workspaceMatch) {
+    const [, operator, spec] = workspaceMatch;
+    if (spec === "*") return range;
+    if (semverPattern.test(spec)) return `workspace:${operator}${nextVersion}`;
+    return range;
+  }
+  const rangeMatch = /^([\^~]?)(.+)$/.exec(range);
+  if (rangeMatch && semverPattern.test(rangeMatch[2])) {
+    return `${rangeMatch[1]}${nextVersion}`;
+  }
+  return range;
+}
+
+// Surgical text rewrite of a package.json: the top-level version field plus any
+// pinned internal range. Editing text (not re-serializing) preserves the file's
+// exact formatting so the diff stays minimal and reviewable.
+function rewritePackageJson(raw, oldVersion, nextVersion, internalNames) {
+  const versionPattern = new RegExp(
+    `("version":\\s*")${escapeRegExp(oldVersion)}(")`,
+  );
+  if (!versionPattern.test(raw)) {
+    throw new Error(`could not find top-level version ${oldVersion}`);
+  }
+  let next = raw.replace(versionPattern, `$1${nextVersion}$2`);
+  for (const name of internalNames) {
+    const depPattern = new RegExp(
+      `("${escapeRegExp(name)}":\\s*")([^"]+)(")`,
+      "g",
+    );
+    next = next.replace(
+      depPattern,
+      (_match, pre, range, post) =>
+        `${pre}${bumpDependencyRange(range, nextVersion)}${post}`,
+    );
+  }
+  return next;
+}
+
+function rewriteManifestVersions(raw, oldVersion, nextVersion) {
+  const pattern = new RegExp(
+    `("version": ")${escapeRegExp(oldVersion)}(")`,
+    "g",
+  );
+  return raw.replace(pattern, `$1${nextVersion}$2`);
+}
+
+function rewriteChangelogVersion(raw, oldVersion, nextVersion) {
+  const marker = `Planned package cohort: \`${oldVersion}\``;
+  if (!raw.includes(marker)) {
+    throw new Error(`CHANGELOG.md is missing "${marker}"`);
+  }
+  return raw.replaceAll(marker, `Planned package cohort: \`${nextVersion}\``);
+}
+
+// Builds the ordered list of file edits for a bump without touching disk beyond
+// reads. Each edit records before/after so a caller can preview, apply, or
+// restore atomically.
+async function computeBumpPlan(manifest, oldVersion, nextVersion) {
+  const names = new Set(manifest.openPackages.map((entry) => entry.name));
+  const edits = [];
+
+  const manifestRaw = await readFile(manifestPath, "utf8");
+  edits.push({
+    relative: "release/manifest.json",
+    before: manifestRaw,
+    after: rewriteManifestVersions(manifestRaw, oldVersion, nextVersion),
+  });
+
+  for (const entry of manifest.openPackages) {
+    const relative = `${entry.path}/package.json`;
+    const before = await readFile(path.join(root, relative), "utf8");
+    edits.push({
+      relative,
+      before,
+      after: rewritePackageJson(before, oldVersion, nextVersion, names),
+    });
+  }
+
+  const changelogRaw = await readFile(path.join(root, "CHANGELOG.md"), "utf8");
+  edits.push({
+    relative: "CHANGELOG.md",
+    before: changelogRaw,
+    after: rewriteChangelogVersion(changelogRaw, oldVersion, nextVersion),
+  });
+
+  return edits;
+}
+
+async function prepare({ spec, dryRun }) {
+  if (!spec) {
+    throw new Error(
+      "usage: node scripts/release.mjs prepare <version|major|minor|patch> [--dry-run]",
+    );
+  }
+  const manifest = await loadManifest();
+  const current = cohortVersion(manifest);
+  const nextVersion = resolveNextVersion(current, spec);
+  const plan = await computeBumpPlan(manifest, current, nextVersion);
+  const changed = plan.filter((edit) => edit.before !== edit.after);
+
+  console.log(
+    `Preparing cohort ${current} -> ${nextVersion} (${changed.length} file(s) change, ${plan.length} inspected)`,
+  );
+  for (const edit of changed) {
+    console.log(`  update ${edit.relative}`);
+  }
+
+  if (dryRun) {
+    console.log("Dry run: no files written, lockfile untouched.");
+    return;
+  }
+
+  // Snapshot everything we may touch (the planned files and the lockfile) so a
+  // failure anywhere below restores the tree to exactly its prior state.
+  const lockRelative = "pnpm-lock.yaml";
+  const lockBefore = await readFile(path.join(root, lockRelative), "utf8");
+  const snapshots = [
+    ...plan.map((edit) => ({ relative: edit.relative, before: edit.before })),
+    { relative: lockRelative, before: lockBefore },
+  ];
+  const restore = async () => {
+    for (const snapshot of snapshots) {
+      await writeFile(path.join(root, snapshot.relative), snapshot.before);
+    }
+  };
+
+  try {
+    for (const edit of changed) {
+      await writeFile(path.join(root, edit.relative), edit.after);
+    }
+    // Refresh the lockfile so it stays consistent with the new versions. This
+    // is offline and a no-op while internal ranges use workspace:*, but keeps
+    // the path correct if a pinned range is ever introduced.
+    await run("pnpm", ["install", "--lockfile-only"], { quiet: true });
+    await check();
+  } catch (error) {
+    await restore();
+    throw new Error(`prepare failed and was rolled back: ${error.message}`, {
+      cause: error,
+    });
+  }
+
+  console.log(
+    `Prepared release ${nextVersion}. Review the diff; revert with "git checkout -- ." if needed.`,
+  );
+}
+
+function parsePrepareArgs(argv) {
+  const flags = new Set(argv.filter((value) => value.startsWith("--")));
+  const positionals = argv.filter((value) => !value.startsWith("--"));
+  return { spec: positionals[0], dryRun: flags.has("--dry-run") };
+}
+
+// ---------------------------------------------------------------------------
+// Ordered, idempotent publish
+//
+// Publishes the cohort in dependency order (a dependency is always on the
+// registry before anything that depends on it), skips versions already present
+// so re-running a partially-completed release is safe, and fails closed on a
+// dirty tree, a tag that disagrees with the cohort version, or any package /
+// manifest version mismatch. Real publishing uses `npm publish --provenance`,
+// which relies on CI OIDC; no token is ever read into or written by this script.
+// ---------------------------------------------------------------------------
+
+function capture(command, args) {
+  return new Promise((resolve) => {
+    let stdout = "";
+    let stderr = "";
+    const child = spawn(command, args, {
+      cwd: root,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk;
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk;
+    });
+    child.once("error", () => resolve({ code: -1, stdout, stderr }));
+    child.once("exit", (code) => resolve({ code, stdout, stderr }));
+  });
+}
+
+// Kahn-style topological sort over the internal dependency graph. Deterministic
+// (ties broken alphabetically) and throws on a cycle rather than looping.
+function topologicalOrder(graph) {
+  const names = Object.keys(graph).sort();
+  const nameSet = new Set(names);
+  const done = new Set();
+  const order = [];
+  while (order.length < names.length) {
+    const ready = names.filter(
+      (name) =>
+        !done.has(name) &&
+        graph[name]
+          .filter((dependency) => nameSet.has(dependency))
+          .every((dependency) => done.has(dependency)),
+    );
+    if (ready.length === 0) {
+      throw new Error("cycle detected in internal dependency graph");
+    }
+    for (const name of ready) {
+      order.push(name);
+      done.add(name);
+    }
+  }
+  return order;
+}
+
+async function internalDependencyGraph(manifest) {
+  const names = new Set(manifest.openPackages.map((entry) => entry.name));
+  const graph = {};
+  for (const entry of manifest.openPackages) {
+    const pkg = await packageManifest(entry);
+    const dependencies = {
+      ...pkg.dependencies,
+      ...pkg.optionalDependencies,
+      ...pkg.peerDependencies,
+    };
+    graph[entry.name] = Object.keys(dependencies).filter((dependency) =>
+      names.has(dependency),
+    );
+  }
+  return graph;
+}
+
+function publishPreflight({ statusPorcelain, tag, cohort }) {
+  const failures = [];
+  if (statusPorcelain === null) {
+    failures.push("could not read git status to verify a clean tree");
+  } else if (statusPorcelain.trim() !== "") {
+    failures.push("refusing to publish from a dirty working tree");
+  }
+  if (tag !== undefined && tag !== `v${cohort}` && tag !== cohort) {
+    failures.push(
+      `git tag ${tag} does not match cohort version ${cohort} (expected v${cohort})`,
+    );
+  }
+  return failures;
+}
+
+// True only when the exact name@version already exists on the registry. A 404
+// means "not published yet". Anything else is ambiguous and throws, so callers
+// never publish (or skip) on a guess.
+async function isPublished(name, version, registry) {
+  const args = ["view", `${name}@${version}`, "version"];
+  if (registry) args.push("--registry", registry);
+  const result = await capture("npm", args);
+  if (result.code === 0 && result.stdout.trim() !== "") return true;
+  if (/E404|not found|is not in this registry/i.test(result.stderr)) {
+    return false;
+  }
+  throw new Error(
+    `could not determine publish state of ${name}@${version}: ${
+      result.stderr.trim() || `npm view exited ${result.code}`
+    }`,
+  );
+}
+
+// Credentials are never stored by this script; it only checks whether an ambient
+// publishing context exists: a CI OIDC token (the provenance path) or an
+// already-authenticated npm user.
+async function hasPublishCredentials(registry) {
+  if (process.env.ACTIONS_ID_TOKEN_REQUEST_URL) return true;
+  const args = ["whoami"];
+  if (registry) args.push("--registry", registry);
+  const result = await capture("npm", args);
+  return result.code === 0;
+}
+
+async function tarballForEntry(entry) {
+  return findTarball(
+    path.join(workRoot, "tarballs", path.basename(entry.path)),
+  );
+}
+
+function parsePublishArgs(argv) {
+  const options = {
+    execute: false,
+    provenance: false,
+    tag: undefined,
+    registry: undefined,
+    distTag: undefined,
+  };
+  const booleanFlags = { "--execute": "execute", "--provenance": "provenance" };
+  const valueFlags = {
+    "--tag": "tag",
+    "--registry": "registry",
+    "--dist-tag": "distTag",
+  };
+  for (let index = 0; index < argv.length; index += 1) {
+    let arg = argv[index];
+    let inlineValue;
+    const equals = arg.indexOf("=");
+    if (arg.startsWith("--") && equals !== -1) {
+      inlineValue = arg.slice(equals + 1);
+      arg = arg.slice(0, equals);
+    }
+    if (arg in booleanFlags) {
+      options[booleanFlags[arg]] = true;
+    } else if (arg in valueFlags) {
+      options[valueFlags[arg]] =
+        inlineValue !== undefined ? inlineValue : argv[(index += 1)];
+    } else {
+      throw new Error(`unknown publish option: ${arg}`);
+    }
+  }
+  return options;
+}
+
+async function publishCohort(options) {
+  const { execute, provenance, tag, registry, distTag } = options;
+  const manifest = await loadManifest();
+  const cohort = cohortVersion(manifest);
+
+  // Fail closed on any package/manifest version mismatch or metadata drift.
+  await check();
+
+  const status = await gitValue(["status", "--porcelain"]);
+  const failures = publishPreflight({ statusPorcelain: status, tag, cohort });
+  if (failures.length > 0) {
+    throw new Error(`Publish preflight failed:\n- ${failures.join("\n- ")}`);
+  }
+
+  const order = topologicalOrder(await internalDependencyGraph(manifest));
+  const entriesByName = new Map(
+    manifest.openPackages.map((entry) => [entry.name, entry]),
+  );
+
+  console.log(
+    `Publish order for cohort ${cohort}${registry ? ` -> ${registry}` : ""} (${execute ? "execute" : "plan"}):`,
+  );
+  for (const name of order) console.log(`  ${name}`);
+
+  if (execute && !(await hasPublishCredentials(registry))) {
+    throw new Error(
+      "refusing to publish: no CI OIDC context or authenticated npm user is available",
+    );
+  }
+  if (execute) {
+    // Pack and verify the exact artifacts we are about to publish.
+    await buildArtifacts({ publishDryRun: false });
+  }
+
+  let published = 0;
+  let skipped = 0;
+  for (const name of order) {
+    const entry = entriesByName.get(name);
+    let already;
+    try {
+      already = await isPublished(name, entry.version, registry);
+    } catch (error) {
+      if (execute) throw error;
+      console.log(
+        `  unknown ${name}@${entry.version} (registry query failed: ${error.message})`,
+      );
+      continue;
+    }
+    if (already) {
+      skipped += 1;
+      console.log(`  skip ${name}@${entry.version} (already on registry)`);
+      continue;
+    }
+    if (!execute) {
+      console.log(`  would publish ${name}@${entry.version}`);
+      continue;
+    }
+    const args = [
+      "publish",
+      await tarballForEntry(entry),
+      "--access",
+      "public",
+    ];
+    if (provenance) args.push("--provenance");
+    if (registry) args.push("--registry", registry);
+    if (distTag) args.push("--tag", distTag);
+    console.log(`  publish ${name}@${entry.version}`);
+    await run("npm", args, { quiet: true });
+    published += 1;
+  }
+
+  console.log(
+    execute
+      ? `Publish complete: ${published} published, ${skipped} already present.`
+      : "Publish plan complete; no packages were published.",
+  );
+}
+
 async function main() {
   const command = process.argv[2] ?? "check";
   if (command === "list-packages") {
@@ -522,6 +979,12 @@ async function main() {
     return;
   }
   if (command === "check") return check();
+  if (command === "prepare" || command === "bump") {
+    return prepare(parsePrepareArgs(process.argv.slice(3)));
+  }
+  if (command === "publish") {
+    return publishCohort(parsePublishArgs(process.argv.slice(3)));
+  }
   if (command === "artifacts") return buildArtifacts({ publishDryRun: false });
   if (command === "dry-run") return buildArtifacts({ publishDryRun: true });
   if (command === "clean") {
@@ -529,11 +992,28 @@ async function main() {
     return;
   }
   throw new Error(
-    "usage: node scripts/release.mjs [check|list-packages|artifacts|dry-run|clean]",
+    "usage: node scripts/release.mjs [check|list-packages|prepare|bump|publish|artifacts|dry-run|clean]",
   );
 }
 
-export { check, cohortVersion, loadManifest, validateOwnership };
+export {
+  bumpDependencyRange,
+  check,
+  cohortVersion,
+  compareSemver,
+  computeBumpPlan,
+  internalDependencyGraph,
+  loadManifest,
+  parsePrepareArgs,
+  parsePublishArgs,
+  publishPreflight,
+  resolveNextVersion,
+  rewriteChangelogVersion,
+  rewriteManifestVersions,
+  rewritePackageJson,
+  topologicalOrder,
+  validateOwnership,
+};
 
 if (
   process.argv[1] &&
