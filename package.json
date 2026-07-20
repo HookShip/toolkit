@@ -14,7 +14,7 @@
     "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm check:boundaries && pnpm check:secrets && pnpm check:release && pnpm build",
     "check:boundaries": "node --test scripts/check-package-boundaries.test.mjs && node scripts/check-package-boundaries.mjs",
     "check:compose": "./infra/validate-compose.sh",
-    "check:release": "node scripts/release.mjs check",
+    "check:release": "node --test scripts/release.test.mjs && node scripts/release.mjs check",
     "check:secrets": "node scripts/check-secret-hygiene.mjs && gitleaks git --config .gitleaks.toml --no-banner --redact=100 .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

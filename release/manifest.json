@@ -1,6 +1,13 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "releaseStatus": "unreleased",
+  "ownership": {
+    "sourceOfTruth": "this repository",
+    "scope": "@webhook-portal",
+    "coordinatedVersioning": "lockstep",
+    "rename": "none",
+    "note": "This repository is the sole publisher and source of truth for every @webhook-portal/* package listed in openPackages, including @webhook-portal/portal-components. The cohort is versioned and published in lockstep from here. The @webhook-portal npm scope is retained; renaming to @hookship is deferred and is not performed by this repository."
+  },
   "openPackages": [
     {
       "name": "@webhook-portal/canonical-model",

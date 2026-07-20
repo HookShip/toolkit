@@ -18,8 +18,20 @@ const manifestPath = path.join(root, "release", "manifest.json");
 const workRoot = path.join(root, ".release-work");
 const referenceAppPath = "apps/reference-server";
 const publicPackageCount = 13;
+const supportedSchemaVersion = 2;
 const semverPattern =
   /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?$/;
+
+// The single, machine-checked ownership contract for the public cohort. These
+// values are asserted (not merely required to exist) so that a silent edit to
+// the manifest that changes the publisher, scope, or versioning model fails the
+// release consistency gate rather than drifting unnoticed.
+const expectedOwnership = {
+  sourceOfTruth: "this repository",
+  scope: "@webhook-portal",
+  coordinatedVersioning: "lockstep",
+  rename: "none",
+};
 
 async function readJson(file) {
   return JSON.parse(await readFile(file, "utf8"));
@@ -47,10 +59,25 @@ async function run(command, args, options = {}) {
 
 async function loadManifest() {
   const manifest = await readJson(manifestPath);
-  if (manifest.schemaVersion !== 1) {
-    throw new Error("release/manifest.json must use schemaVersion 1");
+  if (manifest.schemaVersion !== supportedSchemaVersion) {
+    throw new Error(
+      `release/manifest.json must use schemaVersion ${supportedSchemaVersion}`,
+    );
   }
   return manifest;
+}
+
+// The coordinated cohort version, derived from the manifest so the bump path is
+// the single place that changes it. Throws when packages disagree, which the
+// caller surfaces as a release consistency failure.
+function cohortVersion(manifest) {
+  const versions = new Set(
+    (manifest.openPackages ?? []).map((entry) => entry.version),
+  );
+  if (versions.size !== 1) {
+    throw new Error("all public packages must use one coordinated version");
+  }
+  return [...versions][0];
 }
 
 async function packageManifest(packageEntry) {
@@ -106,6 +133,32 @@ async function checkReferenceApp(failures) {
   }
 }
 
+function validateOwnership(manifest, failures) {
+  const ownership = manifest.ownership;
+  if (ownership === null || typeof ownership !== "object") {
+    failures.push("release manifest must declare an ownership block");
+    return;
+  }
+  const allowedKeys = [
+    "coordinatedVersioning",
+    "note",
+    "rename",
+    "scope",
+    "sourceOfTruth",
+  ];
+  if (!sameValues(Object.keys(ownership).sort(), allowedKeys)) {
+    failures.push(`ownership must contain exactly: ${allowedKeys.join(", ")}`);
+  }
+  for (const [key, expected] of Object.entries(expectedOwnership)) {
+    if (ownership[key] !== expected) {
+      failures.push(`ownership.${key} must be "${expected}"`);
+    }
+  }
+  if (typeof ownership.note !== "string" || ownership.note.trim() === "") {
+    failures.push("ownership.note must be a non-empty string");
+  }
+}
+
 async function check() {
   const manifest = await loadManifest();
   const failures = [];
@@ -116,14 +169,16 @@ async function check() {
   if (
     !sameValues(manifestKeys, [
       "openPackages",
+      "ownership",
       "releaseStatus",
       "schemaVersion",
     ])
   ) {
     failures.push(
-      "release manifest may contain only schemaVersion, releaseStatus, and openPackages",
+      "release manifest may contain only schemaVersion, releaseStatus, ownership, and openPackages",
     );
   }
+  validateOwnership(manifest, failures);
   if (manifest.releaseStatus !== "unreleased") {
     failures.push(
       "releaseStatus must remain unreleased until an actual release is approved",
@@ -150,6 +205,14 @@ async function check() {
 
     if (!entry.path.startsWith("packages/")) {
       failures.push(`${entry.name}: release path must be under packages/`);
+    }
+    if (
+      typeof manifest.ownership?.scope === "string" &&
+      !entry.name.startsWith(`${manifest.ownership.scope}/`)
+    ) {
+      failures.push(
+        `${entry.name}: release package must be under the ${manifest.ownership.scope} scope`,
+      );
     }
     if (!semverPattern.test(entry.version)) {
       failures.push(`${entry.name}: invalid release version ${entry.version}`);
@@ -187,7 +250,9 @@ async function check() {
   const cohortVersions = new Set(
     (manifest.openPackages ?? []).map((entry) => entry.version),
   );
-  if (cohortVersions.size !== 1) {
+  const coordinatedVersion =
+    cohortVersions.size === 1 ? [...cohortVersions][0] : null;
+  if (coordinatedVersion === null) {
     failures.push("all public packages must use one coordinated version");
   }
 
@@ -231,9 +296,12 @@ async function check() {
   if (!changelog.includes("## [Unreleased]")) {
     failures.push("CHANGELOG.md must contain an Unreleased section");
   }
-  if (!changelog.includes("Planned package cohort: `0.1.0`")) {
+  if (
+    coordinatedVersion !== null &&
+    !changelog.includes(`Planned package cohort: \`${coordinatedVersion}\``)
+  ) {
     failures.push(
-      "CHANGELOG.md must identify the planned package cohort version",
+      `CHANGELOG.md must identify the planned package cohort version (\`${coordinatedVersion}\`)`,
     );
   }
 
@@ -465,4 +533,11 @@ async function main() {
   );
 }
 
-await main();
+export { check, cohortVersion, loadManifest, validateOwnership };
+
+if (
+  process.argv[1] &&
+  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+) {
+  await main();
+}
