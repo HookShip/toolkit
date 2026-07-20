@@ -94,6 +94,7 @@ own classes or `[data-*]` selectors.
 | `/secrets`              | Server safe | Redacted display, one-time warning, rotation state                         |
 | `/deliveries`           | Server safe | Timeline, attempts, filters, statuses, replay/test forms                   |
 | `/states`               | Server safe | Empty, loading, issue, unsupported, deletion, export                       |
+| `/backend`              | Server safe | Backend capability matrix and gated backend selection review               |
 | `/session`              | Server safe | Delegated-session expiry and re-auth composition                           |
 | `/primitives`           | Server safe | Badges, buttons, disclosure, dialog, live/toast regions                    |
 | `/client/copy-button`   | Client      | Clipboard interaction and live announcement                                |
@@ -345,6 +346,53 @@ reason:
 `DelegatedSessionExpired` lives at `/session` and accepts an `actions` slot for
 the host's re-auth link or form. Statuses always include text and semantics;
 color is supplementary.
+
+## Backend capabilities and selection
+
+`/backend` renders delivery-backend tradeoffs from **plain, serializable view
+models**. The components never import a private runtime capability schema; the
+host validates and maps its own data into `BackendCapabilitySummary` shapes.
+
+```tsx
+import {
+  BackendCapabilityMatrix,
+  BackendSelectionReview,
+} from "@webhook-portal/portal-components/backend";
+import type { BackendCapabilitySummary } from "@webhook-portal/portal-components";
+
+export function ChooseBackend({
+  backends,
+  selection,
+}: {
+  backends: readonly BackendCapabilitySummary[];
+  selection: BackendCapabilitySummary;
+}) {
+  return (
+    <>
+      <BackendCapabilityMatrix backends={backends} />
+      <form method="post" action="/backends/confirm">
+        <BackendSelectionReview selection={selection} />
+      </form>
+    </>
+  );
+}
+```
+
+Every backend and every capability cell declares a `status` of `supported`,
+`experimental`, `degraded`, or `unsupported`, plus a stable `reasonCode` and a
+bounded human `reason`. `BackendCapabilityMatrix` compares backends across the
+canonical `BACKEND_CAPABILITY_DIMENSIONS` (durability, consistency,
+acknowledgement barrier, ordering, retry, lease/fencing, replay/redrive,
+dead-letter queue, multi-replica safety, required external services, and
+deployment modes).
+
+`BackendSelectionReview` renders the full tradeoff detail and a confirm control
+that is **disabled whenever the selection is unsupported, declares an
+unsupported capability, or has an error-severity issue**. Blocking reasons are
+announced through a live alert region so a tradeoff is never hidden and an
+unsupported guarantee is never claimed. The pure `evaluateBackendSelection`
+helper exposes the same decision (`canConfirm`, `blockers`, `warnings`) for
+server-side gating.
 
 ## Theme tokens
 

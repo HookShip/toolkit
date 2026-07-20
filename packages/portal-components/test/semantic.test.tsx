@@ -6,6 +6,10 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { DeliveryFilters, DeliveryTimeline } from "../src/deliveries.js";
+import {
+  BackendCapabilityMatrix,
+  BackendSelectionReview,
+} from "../src/backend.js";
 import { EndpointList } from "../src/endpoints.js";
 import {
   CodeSample,
@@ -24,9 +28,11 @@ import {
 import { DeletionState, EmptyState, ExportState } from "../src/states.js";
 import {
   attemptFixtures,
+  backendFixtures,
   endpointFixtures,
   eventFixtures,
   schemaFixtures,
+  supportedBackendFixture,
 } from "./fixtures.js";
 
 afterEach(cleanup);
@@ -171,5 +177,33 @@ describe("semantic portal composition", () => {
       }),
     ).toBeDefined();
     expect(screen.getByText("export_02")).toBeDefined();
+  });
+
+  it("supports route-appropriate heading levels for backend surfaces", () => {
+    render(
+      <section aria-labelledby="backend-heading">
+        <h2 id="backend-heading">Delivery backend</h2>
+        <BackendCapabilityMatrix
+          backends={backendFixtures}
+          heading="Compare backends"
+          headingLevel={3}
+        />
+        <BackendSelectionReview
+          headingLevel={3}
+          selection={supportedBackendFixture}
+        />
+      </section>,
+    );
+
+    expect(
+      screen.getByRole("heading", { level: 3, name: "Compare backends" })
+        .tagName,
+    ).toBe("H3");
+    expect(
+      screen.getByRole("heading", { level: 3, name: "PostgreSQL" }).tagName,
+    ).toBe("H3");
+    expect(
+      screen.getByRole("table", { name: "Backend capability comparison" }),
+    ).toBeDefined();
   });
 });

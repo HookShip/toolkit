@@ -24,6 +24,7 @@ describe("package contract", () => {
     expect(packageJson.peerDependencies.react).toBe(">=18.3 <20");
     expect(packageJson.peerDependencies["react-dom"]).toBe(">=18.3 <20");
     expect(packageJson.exports).toHaveProperty("./client/secret-reveal");
+    expect(packageJson.exports).toHaveProperty("./backend");
     expect(packageJson.exports).toHaveProperty("./styles.css");
     expect(packageJson.sideEffects).toEqual(["./styles/*.css"]);
     expect(packageJson.files).not.toContain("src");

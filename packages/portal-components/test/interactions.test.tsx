@@ -16,7 +16,18 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { CopyButton } from "../src/client/copy-button.js";
 import { SecretReveal } from "../src/client/secret-reveal.js";
 import { Tabs } from "../src/client/tabs.js";
+import {
+  BackendCapabilityMatrix,
+  BackendSelectionReview,
+  evaluateBackendSelection,
+} from "../src/backend.js";
 import { EndpointInput, SubscriptionEventSelector } from "../src/endpoints.js";
+import {
+  backendFixtures,
+  backendSelectionIssueFixtures,
+  supportedBackendFixture,
+  unsupportedBackendFixture,
+} from "./fixtures.js";
 
 afterEach(cleanup);
 
@@ -185,5 +196,111 @@ describe("form accessibility", () => {
     expect(screen.getByRole("group")).toHaveAccessibleDescription(
       "Choose every event this destination should receive.",
     );
+  });
+});
+
+describe("backend selection review", () => {
+  it("permits confirming a fully supported backend", () => {
+    render(<BackendSelectionReview selection={supportedBackendFixture} />);
+
+    const confirm = screen.getByRole("button", { name: "Confirm backend" });
+    expect(confirm).toBeEnabled();
+    expect(confirm).toHaveAttribute("value", "postgres");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByRole("form")).toHaveAttribute(
+      "data-can-confirm",
+      "true",
+    );
+  });
+
+  it("prevents confirming an unsupported backend and explains why", () => {
+    render(<BackendSelectionReview selection={unsupportedBackendFixture} />);
+
+    expect(
+      screen.getByRole("button", { name: "Confirm backend" }),
+    ).toBeDisabled();
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent("Cannot confirm this backend");
+    expect(alert).toHaveTextContent("BACKEND_EVALUATION_ONLY");
+    expect(alert).toHaveTextContent("DURABILITY_EPHEMERAL");
+  });
+
+  it("renders deployment modes when external services are empty, without an empty facts list", () => {
+    const { container } = render(
+      <BackendSelectionReview selection={unsupportedBackendFixture} />,
+    );
+
+    expect(unsupportedBackendFixture.externalServices).toEqual([]);
+
+    const facts = container.querySelector(".whp-backend-review__facts");
+    expect(facts).not.toBeNull();
+    const factRows = facts?.querySelectorAll("div") ?? [];
+    expect(factRows).toHaveLength(1);
+    expect(factRows[0]).toHaveTextContent("Deployment modes");
+    expect(factRows[0]).toHaveTextContent("local");
+    expect(facts).not.toHaveTextContent("Required external services");
+  });
+
+  it("omits the facts list entirely when neither external services nor deployment modes are present", () => {
+    const { container } = render(
+      <BackendSelectionReview
+        selection={{
+          ...supportedBackendFixture,
+          deploymentModes: [],
+          externalServices: [],
+        }}
+      />,
+    );
+
+    expect(container.querySelector(".whp-backend-review__facts")).toBeNull();
+  });
+
+  it("prevents confirmation when an error-severity issue is present", () => {
+    render(
+      <BackendSelectionReview
+        issues={backendSelectionIssueFixtures}
+        selection={supportedBackendFixture}
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Confirm backend" }),
+    ).toBeDisabled();
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "MISSING_EXTERNAL_SERVICE",
+    );
+  });
+
+  it("evaluates confirmation eligibility deterministically", () => {
+    expect(evaluateBackendSelection(supportedBackendFixture).canConfirm).toBe(
+      true,
+    );
+
+    const blocked = evaluateBackendSelection(unsupportedBackendFixture);
+    expect(blocked.canConfirm).toBe(false);
+    expect(blocked.blockers.map((blocker) => blocker.code)).toContain(
+      "BACKEND_EVALUATION_ONLY",
+    );
+
+    const withIssue = evaluateBackendSelection(
+      supportedBackendFixture,
+      backendSelectionIssueFixtures,
+    );
+    expect(withIssue.canConfirm).toBe(false);
+  });
+
+  it("exposes an accessible, scrollable comparison table", () => {
+    render(<BackendCapabilityMatrix backends={backendFixtures} />);
+
+    const region = screen.getByRole("region", {
+      name: "Backend capability comparison table",
+    });
+    expect(region).toHaveAttribute("tabindex", "0");
+    expect(
+      screen.getByRole("columnheader", { name: /PostgreSQL/ }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("rowheader", { name: /Acknowledgement barrier/ }),
+    ).toBeInTheDocument();
   });
 });

@@ -6,6 +6,10 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { CopyButton } from "../src/client/copy-button.js";
 import { SecretReveal } from "../src/client/secret-reveal.js";
 import { Tabs } from "../src/client/tabs.js";
+import {
+  BackendCapabilityMatrix,
+  BackendSelectionReview,
+} from "../src/backend.js";
 import { DeliveryTimeline } from "../src/deliveries.js";
 import {
   EndpointForm,
@@ -34,7 +38,12 @@ import {
   LoadingState,
   UnsupportedCapability,
 } from "../src/states.js";
-import { attemptFixtures } from "./fixtures.js";
+import {
+  attemptFixtures,
+  backendFixtures,
+  supportedBackendFixture,
+  unsupportedBackendFixture,
+} from "./fixtures.js";
 
 describe("server rendering", () => {
   it("renders the complete server-safe surface without browser globals", () => {
@@ -73,6 +82,8 @@ describe("server rendering", () => {
         <OneTimeRevealWarning />
         <SecretRotationState status="overlap" />
         <DeliveryTimeline attempts={attemptFixtures} />
+        <BackendCapabilityMatrix backends={backendFixtures} />
+        <BackendSelectionReview selection={supportedBackendFixture} />
         <EmptyState title="No endpoints" />
         <LoadingState />
         <IssueState details={<code>request_id=req_01</code>} />
@@ -104,6 +115,41 @@ describe("server rendering", () => {
     const markup = renderToStaticMarkup(<DeliveryTimeline attempts={[]} />);
 
     expect(markup).toContain("No delivery attempts yet.");
+  });
+
+  it("server-gates backend confirmation on declared support", () => {
+    const supported = renderToStaticMarkup(
+      <BackendSelectionReview selection={supportedBackendFixture} />,
+    );
+    expect(supported).toContain('data-can-confirm="true"');
+    expect(supported).toContain("Confirm backend");
+    expect(supported).not.toContain("disabled=");
+    expect(supported).not.toContain("Cannot confirm this backend");
+
+    const blocked = renderToStaticMarkup(
+      <BackendSelectionReview selection={unsupportedBackendFixture} />,
+    );
+    expect(blocked).toContain('data-can-confirm="false"');
+    expect(blocked).toContain("disabled=");
+    expect(blocked).toContain("Cannot confirm this backend");
+    expect(blocked).toContain("BACKEND_EVALUATION_ONLY");
+    expect(blocked).toContain('role="alert"');
+    expect(blocked).not.toContain("undefined");
+  });
+
+  it("renders a comparison matrix with a caption and per-backend columns", () => {
+    const markup = renderToStaticMarkup(
+      <BackendCapabilityMatrix backends={backendFixtures} />,
+    );
+
+    expect(markup).toContain(
+      "<caption>Backend capability comparison</caption>",
+    );
+    expect(markup).toContain("PostgreSQL");
+    expect(markup).toContain("Recommended");
+    expect(markup).toContain("Acknowledgement barrier");
+    expect(markup).toContain('data-status="unsupported"');
+    expect(markup).not.toContain("undefined");
   });
 
   it("server-renders deterministic client islands without browser access", () => {

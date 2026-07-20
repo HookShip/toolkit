@@ -59,6 +59,10 @@
       "types": "./dist/states.d.ts",
       "import": "./dist/states.js"
     },
+    "./backend": {
+      "types": "./dist/backend.d.ts",
+      "import": "./dist/backend.js"
+    },
     "./session": {
       "types": "./dist/session.d.ts",
       "import": "./dist/session.js"

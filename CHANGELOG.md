@@ -25,6 +25,8 @@ tag, or release has been published.
 - Data-only extension SDK, conformance harness, and reproducible public source
   packs.
 - Accessible server-first portal components.
+- Server-safe backend capability matrix and gated backend selection review in
+  `portal-components`, driven by plain serializable view models.
 - `hookship-native` provider kind for read-only migration inventory import and
   assessment.
 - The `webhook-portal` CLI and importable single-team reference server.

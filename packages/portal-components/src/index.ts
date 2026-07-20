@@ -6,6 +6,12 @@
  * statically analyzable.
  */
 export type {
+  BackendCapabilityCell,
+  BackendCapabilityDimension,
+  BackendCapabilityStatus,
+  BackendCapabilitySummary,
+  BackendSelectionIssue,
+  BackendSelectionSeverity,
   DeliveryAttempt,
   DeliveryStatus,
   EndpointStatus,
