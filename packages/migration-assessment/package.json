@@ -51,6 +51,7 @@
     "./schema.json": "./schema/migration-inventory.schema.json",
     "./examples/custom-http.json": "./examples/custom-http.inventory.json",
     "./examples/hookdeck.json": "./examples/hookdeck.inventory.json",
+    "./examples/hookship-native.json": "./examples/hookship-native.inventory.json",
     "./examples/svix.json": "./examples/svix.inventory.json"
   },
   "engines": {

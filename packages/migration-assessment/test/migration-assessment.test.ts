@@ -19,6 +19,7 @@ import {
   assessMigration,
   parseCustomHttpInventoryExport,
   parseHookdeckInventoryExport,
+  parseHookshipNativeInventoryExport,
   parseInventoryExportJson,
   parseSvixInventoryExport,
   renderAssessmentJson,
@@ -122,6 +123,7 @@ describe("provider-neutral inventory imports", () => {
     ["custom-http", parseCustomHttpInventoryExport],
     ["svix", parseSvixInventoryExport],
     ["hookdeck", parseHookdeckInventoryExport],
+    ["hookship-native", parseHookshipNativeInventoryExport],
   ] as const)("parses a closed %s export fixture", (provider, parser) => {
     const result = parser(fixture(provider));
 
@@ -271,6 +273,17 @@ describe("migration assessment", () => {
       "never performs or guarantees",
     );
     expect(result.readiness.blocked).toBe(true);
+  });
+
+  it("assesses a HookShip native inventory while preserving the source provider", () => {
+    const inventory = parsedInventory("hookship-native");
+    const result = assess(inventory);
+
+    expect(result.provider.kind).toBe("hookship-native");
+    expect(result.counts.endpoints).toBe(1);
+    expect(result.counts.subscriptions).toBe(1);
+    expect(result.endpointMappings).toHaveLength(1);
+    expect(result.readiness.blocked).toBe(false);
   });
 
   it("reports target policy and operational parity gaps", () => {

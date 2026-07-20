@@ -1,0 +1,63 @@
+{
+  "$schema": "https://webhook-portal.dev/schemas/migration-inventory/2026-07-18",
+  "destinations": [
+    {
+      "id": "native-orders-destination",
+      "kind": "http",
+      "providerId": "native-receiver-orders",
+      "url": "https://receiver.example/webhooks/orders"
+    }
+  ],
+  "endpoints": [
+    {
+      "destinationIds": ["native-orders-destination"],
+      "id": "native-orders",
+      "name": "Orders production",
+      "observability": {
+        "attemptLogs": true,
+        "auditLogs": true,
+        "deliveryLogs": true,
+        "metrics": true,
+        "replay": true
+      },
+      "providerId": "endpoint-native-orders",
+      "rate": {
+        "burst": 200,
+        "requestsPerSecond": 100,
+        "supported": true
+      },
+      "retention": {
+        "attemptLogDays": 30,
+        "deliveryLogDays": 90,
+        "payloadRetentionDays": 30
+      },
+      "retry": {
+        "backoff": "exponential",
+        "maxAttempts": 12,
+        "maxDurationSeconds": 86400,
+        "supported": true
+      },
+      "signing": {
+        "algorithms": ["hmac-sha256"],
+        "headerNames": ["webhook-signature"],
+        "profile": "standard-hmac",
+        "rotationSupported": true
+      },
+      "state": "active",
+      "subscriptions": [
+        {
+          "event": "order.created"
+        }
+      ]
+    }
+  ],
+  "format": "webhook-portal.migration-inventory",
+  "formatVersion": "1.0.0",
+  "provider": {
+    "kind": "hookship-native",
+    "accountId": "workspace-production",
+    "connectionId": "hookship-native-postgres",
+    "name": "HookShip native (PostgreSQL runtime)"
+  },
+  "schemaVersion": "2026-07-18"
+}

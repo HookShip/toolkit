@@ -25,6 +25,8 @@ tag, or release has been published.
 - Data-only extension SDK, conformance harness, and reproducible public source
   packs.
 - Accessible server-first portal components.
+- `hookship-native` provider kind for read-only migration inventory import and
+  assessment.
 - The `webhook-portal` CLI and importable single-team reference server.
 - Private Apache-2.0 reference-server process wrapper and optional local
   PostgreSQL/MinIO/TLS Compose stack.

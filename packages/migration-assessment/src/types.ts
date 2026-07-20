@@ -11,7 +11,8 @@ export const MIGRATION_INVENTORY_FORMAT =
 export const MIGRATION_INVENTORY_FORMAT_VERSION = "1.0.0" as const;
 export const MIGRATION_ASSESSMENT_VERSION = "1.0.0" as const;
 
-export type ProviderKind = "custom-http" | "hookdeck" | "svix";
+export type ProviderKind =
+  "custom-http" | "hookdeck" | "hookship-native" | "svix";
 export type EndpointState = "active" | "disabled" | "paused" | "unknown";
 export type DiagnosticSeverity = "error" | "fatal" | "info" | "warning";
 

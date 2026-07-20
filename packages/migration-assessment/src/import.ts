@@ -57,6 +57,7 @@ const endpointStates = new Set<EndpointState>([
 const providerKinds = new Set<ProviderKind>([
   "custom-http",
   "hookdeck",
+  "hookship-native",
   "svix",
 ]);
 const backoffs = new Set([
@@ -880,7 +881,7 @@ export function parseInventoryExportJson(
       diagnostic(
         context,
         "INVALID_PROVIDER",
-        "Provider kind must be custom-http, hookdeck, or svix.",
+        "Provider kind must be custom-http, hookdeck, hookship-native, or svix.",
         "/provider/kind",
       );
     } else if (
@@ -1069,6 +1070,16 @@ export function parseHookdeckInventoryExport(
 ): InventoryImportResult {
   return parseInventoryExportJson(source, {
     expectedProvider: "hookdeck",
+    ...(limits === undefined ? {} : { limits }),
+  });
+}
+
+export function parseHookshipNativeInventoryExport(
+  source: string | Uint8Array,
+  limits?: Partial<ImportLimits>,
+): InventoryImportResult {
+  return parseInventoryExportJson(source, {
+    expectedProvider: "hookship-native",
     ...(limits === undefined ? {} : { limits }),
   });
 }

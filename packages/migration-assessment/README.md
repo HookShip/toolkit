@@ -1,10 +1,10 @@
 # `@webhook-portal/migration-assessment`
 
 Read-only, provider-neutral assessment for planning webhook migrations from
-custom HTTP delivery, Svix, or Hookdeck. The package parses bounded JSON
-exports, maps endpoint subscriptions to a canonical contract, compares an
-adapter capability document and target policy, and renders deterministic JSON or
-Markdown.
+custom HTTP delivery, Svix, Hookdeck, or a HookShip native runtime. The package
+parses bounded JSON exports, maps endpoint subscriptions to a canonical
+contract, compares an adapter capability document and target policy, and renders
+deterministic JSON or Markdown.
 
 It **never connects to a provider, performs writes, handles signing material, or
 claims to migrate anything automatically**.
@@ -44,6 +44,7 @@ Provider helpers enforce the declared provider kind:
 - `parseCustomHttpInventoryExport`
 - `parseSvixInventoryExport`
 - `parseHookdeckInventoryExport`
+- `parseHookshipNativeInventoryExport`
 - `parseInventoryExportJson`
 
 Only JSON text or UTF-8 bytes are accepted. Import is closed-schema and bounded
@@ -112,6 +113,7 @@ characters. Both renderers enforce a configurable UTF-8 byte limit.
 - `@webhook-portal/migration-assessment/examples/custom-http.json`
 - `@webhook-portal/migration-assessment/examples/svix.json`
 - `@webhook-portal/migration-assessment/examples/hookdeck.json`
+- `@webhook-portal/migration-assessment/examples/hookship-native.json`
 - `@webhook-portal/migration-assessment/assessment`
 - `@webhook-portal/migration-assessment/import`
 - `@webhook-portal/migration-assessment/render`

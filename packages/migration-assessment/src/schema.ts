@@ -163,7 +163,9 @@ export const MIGRATION_INVENTORY_JSON_SCHEMA: JsonSchema = {
       properties: {
         accountId: boundedString,
         connectionId: boundedString,
-        kind: { enum: ["custom-http", "hookdeck", "svix"] },
+        kind: {
+          enum: ["custom-http", "hookdeck", "hookship-native", "svix"],
+        },
         name: boundedString,
       },
       required: ["accountId", "kind"],

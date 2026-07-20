@@ -31,6 +31,7 @@ describe("publish contract", () => {
         "./types",
         "./examples/custom-http.json",
         "./examples/hookdeck.json",
+        "./examples/hookship-native.json",
         "./examples/svix.json",
       ]),
     );

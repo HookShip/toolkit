@@ -59,6 +59,62 @@ export const EXAMPLE_CUSTOM_HTTP_INVENTORY = Object.freeze({
   schemaVersion: MIGRATION_INVENTORY_SCHEMA_VERSION,
 } satisfies MigrationInventory);
 
+export const EXAMPLE_HOOKSHIP_NATIVE_INVENTORY = Object.freeze({
+  $schema: MIGRATION_INVENTORY_SCHEMA_ID,
+  destinations: [
+    {
+      id: "native-orders-destination",
+      kind: "http",
+      providerId: "native-receiver-orders",
+      url: "https://receiver.example/webhooks/orders",
+    },
+  ],
+  endpoints: [
+    {
+      destinationIds: ["native-orders-destination"],
+      id: "native-orders",
+      name: "Orders production",
+      observability: {
+        attemptLogs: true,
+        auditLogs: true,
+        deliveryLogs: true,
+        metrics: true,
+        replay: true,
+      },
+      providerId: "endpoint-native-orders",
+      rate: { burst: 200, requestsPerSecond: 100, supported: true },
+      retention: {
+        attemptLogDays: 30,
+        deliveryLogDays: 90,
+        payloadRetentionDays: 30,
+      },
+      retry: {
+        backoff: "exponential",
+        maxAttempts: 12,
+        maxDurationSeconds: 86400,
+        supported: true,
+      },
+      signing: {
+        algorithms: ["hmac-sha256"],
+        headerNames: ["webhook-signature"],
+        profile: "standard-hmac",
+        rotationSupported: true,
+      },
+      state: "active",
+      subscriptions: [{ event: "order.created" }],
+    },
+  ],
+  format: MIGRATION_INVENTORY_FORMAT,
+  formatVersion: MIGRATION_INVENTORY_FORMAT_VERSION,
+  provider: {
+    accountId: "workspace-production",
+    connectionId: "hookship-native-postgres",
+    kind: "hookship-native",
+    name: "HookShip native (PostgreSQL runtime)",
+  },
+  schemaVersion: MIGRATION_INVENTORY_SCHEMA_VERSION,
+} satisfies MigrationInventory);
+
 export const EXAMPLE_TARGET_POLICY = Object.freeze({
   allowedSigningAlgorithms: ["hmac-sha256"],
   endpointLimit: 100,

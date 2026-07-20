@@ -257,7 +257,7 @@
           "type": "string"
         },
         "kind": {
-          "enum": ["custom-http", "hookdeck", "svix"]
+          "enum": ["custom-http", "hookdeck", "hookship-native", "svix"]
         },
         "name": {
           "maxLength": 512,
