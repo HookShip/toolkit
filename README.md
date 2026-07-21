@@ -13,6 +13,12 @@ external infrastructure beyond the optional local reference stack.
 > Package names intentionally remain under `@webhook-portal/*`. The `@hookship`
 > npm scope is not yet authenticated or reserved, so published package scopes
 > must not be renamed yet.
+>
+> This repository is the sole publisher and single source of truth for every
+> `@webhook-portal/*` package, including `@webhook-portal/portal-components`.
+> Any other repository consumes the published packages rather than re-publishing
+> them. See [`docs/release-policy.md`](docs/release-policy.md) and the
+> [compatibility matrix](docs/compatibility-matrix.md).
 
 ## What it is
 
@@ -85,6 +91,15 @@ pnpm release:clean
 
 `release:dry-run` creates local tarballs, checksums, SPDX documents, provenance,
 and npm publish dry-runs. It never publishes, tags, commits, or pushes.
+
+Release preparation and publishing are covered by
+[`docs/release-policy.md`](docs/release-policy.md):
+
+```sh
+pnpm release:prepare -- minor --dry-run  # preview an atomic coordinated bump
+pnpm release:publish                     # non-mutating ordered publish plan
+pnpm test:verdaccio                      # publish + install the cohort against a throwaway local registry
+```
 
 ## CLI
 
@@ -171,9 +186,12 @@ aggregate regression floors are documented in
 [`docs/coverage.md`](docs/coverage.md).
 
 [`release/manifest.json`](release/manifest.json) lists exactly the 13 public
-packages. [`scripts/release.mjs`](scripts/release.mjs) rejects missing, extra,
-private, non-Apache, or incorrectly scoped package entries and separately
-verifies that the reference app remains a private Apache-2.0 wrapper.
+packages and, in its `ownership` block, names this repository the sole publisher
+and source of truth for the cohort. [`scripts/release.mjs`](scripts/release.mjs)
+rejects missing, extra, private, non-Apache, out-of-scope, or ownership-drifted
+entries, separately verifies that the reference app remains a private Apache-2.0
+wrapper, and provides the atomic `prepare` and ordered, idempotent `publish`
+paths described in [`docs/release-policy.md`](docs/release-policy.md).
 
 ## Repository layout
 
@@ -197,6 +215,8 @@ release/     coordinated public package manifest
 - [`SUPPORT.md`](SUPPORT.md)
 - [`SECURITY.md`](SECURITY.md)
 - [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md)
+- [`docs/release-policy.md`](docs/release-policy.md)
+- [`docs/compatibility-matrix.md`](docs/compatibility-matrix.md)
 - [`docs/architecture/README.md`](docs/architecture/README.md)
 
 Licensed under [Apache-2.0](LICENSE).

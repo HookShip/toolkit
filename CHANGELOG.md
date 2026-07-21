@@ -34,6 +34,21 @@ tag, or release has been published.
   PostgreSQL/MinIO/TLS Compose stack.
 - Standalone workspace, boundary, secret-hygiene, coverage, smoke, package,
   release, and CI validation for all 13 public packages.
+- Release ownership block in `release/manifest.json` (schema 2) naming this
+  repository the sole publisher and source of truth for the `@webhook-portal`
+  cohort, enforced by `scripts/release.mjs check`.
+- Atomic, reversible `prepare`/`bump` release path and an ordered, idempotent,
+  provenance-based `publish` path that fails closed on a dirty tree, tag
+  mismatch, or version mismatch and never stores tokens.
+- Tag-driven, approval-gated release workflow that runs all gates and, once
+  approved, publishes with provenance and attaches artifacts, SBOM, checksums,
+  and provenance as release assets.
+- Zero-spend local Verdaccio integration harness (`pnpm test:verdaccio`) that
+  publishes the cohort to a throwaway registry and installs, imports, and
+  invokes it from a clean consumer.
+- Release policy and compatibility matrix documentation owned by this repository
+  (`docs/release-policy.md`, `docs/compatibility-matrix.md`) and ADR-0008 on
+  release ownership and automation.
 
 ### Changed
 
@@ -41,3 +56,6 @@ tag, or release has been published.
   applications, packages, infrastructure, and operational documents.
 - Coordinated all 13 public packages in one release manifest while retaining
   their existing `@webhook-portal/*` names.
+- Documented that this repository is the sole publisher of the cohort; other
+  repositories consume the published packages rather than re-publishing them.
+  Migrating a downstream consumer is a separate, dependent workstream.

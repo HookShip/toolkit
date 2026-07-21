@@ -29,6 +29,15 @@ for a coordinated `0.1.0` release.
 - Publish only after the existing `@webhook-portal` npm scope is authenticated
   for the release process.
 
+This repository is the sole publisher and source of truth for the cohort. The
+release process is defined and automated: an atomic coordinated version
+`prepare`/`bump`, an ordered, idempotent, provenance-based `publish`, a
+tag-driven and approval-gated release workflow, and a zero-spend local Verdaccio
+harness. See [`docs/release-policy.md`](docs/release-policy.md) and
+[`docs/compatibility-matrix.md`](docs/compatibility-matrix.md). Migrating a
+downstream consumer onto the published cohort is a separate, dependent
+workstream.
+
 Renaming packages to `@hookship/*` is explicitly deferred until that npm scope
 is reserved and authenticated. A scope migration would require a separate
 compatibility and deprecation plan.

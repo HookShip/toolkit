@@ -21,6 +21,7 @@ public toolkit.
 | [ADR-0005](adr-0005-contract-normalization-standards.md)                          | Contract normalization standards                                | Accepted |
 | [ADR-0006](adr-0006-capability-based-adapter-interfaces.md)                       | Capability-based adapter interfaces                             | Accepted |
 | [ADR-0007](adr-0007-declarative-signed-extensions-no-arbitrary-code-execution.md) | Declarative, signed extensions with no arbitrary code execution | Accepted |
+| [ADR-0008](adr-0008-release-ownership-and-automation.md)                          | Release ownership and automation                                | Accepted |
 
 The numbering preserves the decisions inherited by this history-filtered public
 extraction. Missing numbers refer to decisions that are not part of this

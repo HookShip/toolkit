@@ -20,16 +20,19 @@ running `pnpm check`.
 
 Run the narrowest relevant command while developing, then the broader gate:
 
-| Scope                                | Command                |
-| ------------------------------------ | ---------------------- |
-| Tests                                | `pnpm test`            |
-| Full Node.js gate                    | `pnpm check`           |
-| Coverage                             | `pnpm test:coverage`   |
-| In-memory workflow                   | `pnpm smoke`           |
-| Package tarballs                     | `pnpm pack:smoke`      |
-| Reference infrastructure             | `pnpm check:compose`   |
-| Release metadata                     | `pnpm check:release`   |
-| Release artifacts without publishing | `pnpm release:dry-run` |
+| Scope                                | Command                                       |
+| ------------------------------------ | --------------------------------------------- |
+| Tests                                | `pnpm test`                                   |
+| Full Node.js gate                    | `pnpm check`                                  |
+| Coverage                             | `pnpm test:coverage`                          |
+| In-memory workflow                   | `pnpm smoke`                                  |
+| Package tarballs                     | `pnpm pack:smoke`                             |
+| Reference infrastructure             | `pnpm check:compose`                          |
+| Release metadata                     | `pnpm check:release`                          |
+| Release artifacts without publishing | `pnpm release:dry-run`                        |
+| Coordinated version bump (preview)   | `pnpm release:prepare -- <version> --dry-run` |
+| Ordered publish plan                 | `pnpm release:publish`                        |
+| Local registry publish + install     | `pnpm test:verdaccio`                         |
 
 `pnpm check` covers formatting, linting, type checking, all deterministic
 workspace tests, extension-pack tests, package boundaries, secret hygiene,
@@ -55,6 +58,10 @@ Docker context and production deployment layout.
 7. Run `pnpm pack:smoke` after changing package exports, files, binaries, or
    runtime dependencies.
 8. Run `pnpm release:clean` after inspecting generated release artifacts.
+9. Treat this repository as the sole publisher of the `@webhook-portal/*`
+   cohort. Keep the release manifest's `ownership` block accurate and do not add
+   publishing from another repository; see
+   [`docs/release-policy.md`](docs/release-policy.md).
 
 Package scopes remain `@webhook-portal/*` until a separately reviewed npm-scope
 migration is possible.
