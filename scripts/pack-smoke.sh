@@ -80,9 +80,25 @@ for package_dir in "${PACKAGES[@]}"; do
     import path from 'node:path';
 
     const contentsDir = process.argv[1];
+    const expectedDirectory = process.argv[2];
     const pkg = JSON.parse(
       await readFile(path.join(contentsDir, 'package.json'), 'utf8'),
     );
+
+    // The packed tarball must retain exact monorepo repository provenance so a
+    // published package carries verifiable provenance.
+    const repository = pkg.repository;
+    const expectedUrl = 'git+https://github.com/HookShip/toolkit.git';
+    if (
+      !repository ||
+      repository.type !== 'git' ||
+      repository.url !== expectedUrl ||
+      repository.directory !== expectedDirectory
+    ) {
+      throw new Error(
+        \`packed repository provenance is missing or drifted: \${JSON.stringify(repository)}\`,
+      );
+    }
 
     const referenced = new Set();
     function collectExportPaths(node) {
@@ -126,7 +142,7 @@ for package_dir in "${PACKAGES[@]}"; do
       }
     }
     console.log(\`  verified \${referenced.size} declared entry point(s) exist in the tarball\`);
-  " "$contents_dir"
+  " "$contents_dir" "$package_dir"
 
   echo "  OK: LICENSE/README present, no dev-only files leaked"
 done

@@ -18,8 +18,13 @@ one coordinated version and is published together from a single tag.
   yet).
 - **Node.js engine:** `>=22` for every package.
 - **License:** Apache-2.0 for every package.
+- **Repository provenance:** every package declares monorepo repository metadata
+  — `type: git`, `url: git+https://github.com/HookShip/toolkit.git`, and its own
+  `directory` — matching the actual remote, so npm provenance is verifiable.
+  `scripts/release.mjs check` fails closed on any missing, drifted, or miscased
+  value, and the packed tarballs are verified to retain it.
 - **Registry:** the public npm registry, once the scope is authenticated. No
-  registry, homepage, or repository URL is asserted here until one exists.
+  homepage or registry URL is asserted until one exists.
 
 ## Packages
 

@@ -47,6 +47,48 @@ const expectedOwnership = {
   rename: "none",
 };
 
+// Every published package must carry monorepo repository provenance metadata
+// that exactly matches the real remote and the package's own directory, or npm
+// provenance is unverifiable. The URL is the canonical `git+https` form of the
+// actual `origin` remote; nothing else is accepted (a different host, org,
+// casing, or a missing/extra field all fail closed).
+const repositoryType = "git";
+const repositoryUrl = "git+https://github.com/HookShip/toolkit.git";
+
+// Validates a package's `repository` object against the expected provenance
+// metadata for its directory. Exact string comparisons make casing and host
+// drift fail. Returns a list of failure strings (empty when valid).
+function validateRepository(repository, directory, label) {
+  const failures = [];
+  if (
+    repository === null ||
+    typeof repository !== "object" ||
+    Array.isArray(repository)
+  ) {
+    failures.push(`${label}: repository provenance metadata is missing`);
+    return failures;
+  }
+  if (
+    !sameValues(Object.keys(repository).sort(), ["directory", "type", "url"])
+  ) {
+    failures.push(
+      `${label}: repository must contain exactly type, url, and directory`,
+    );
+  }
+  if (repository.type !== repositoryType) {
+    failures.push(`${label}: repository.type must be "${repositoryType}"`);
+  }
+  if (repository.url !== repositoryUrl) {
+    failures.push(`${label}: repository.url must be "${repositoryUrl}"`);
+  }
+  if (repository.directory !== directory) {
+    failures.push(
+      `${label}: repository.directory must be "${directory}" (got "${repository.directory}")`,
+    );
+  }
+  return failures;
+}
+
 async function readJson(file) {
   return JSON.parse(await readFile(file, "utf8"));
 }
@@ -255,6 +297,13 @@ async function check() {
       }
       if (!Array.isArray(pkg.files) || pkg.files.length === 0) {
         failures.push(`${entry.name}: package files allowlist is missing`);
+      }
+      for (const failure of validateRepository(
+        pkg.repository,
+        entry.path,
+        entry.name,
+      )) {
+        failures.push(failure);
       }
     } catch (error) {
       failures.push(`${entry.path}: ${error.message}`);
@@ -478,6 +527,16 @@ async function buildArtifacts({ publishDryRun }) {
       packedManifest.version !== entry.version
     ) {
       throw new Error(`${entry.name}: packed manifest name/version mismatch`);
+    }
+    // The packed tarball must retain the repository provenance metadata, or a
+    // published package would carry unverifiable provenance.
+    const packedRepositoryFailures = validateRepository(
+      packedManifest.repository,
+      entry.path,
+      `${entry.name} (packed)`,
+    );
+    if (packedRepositoryFailures.length > 0) {
+      throw new Error(packedRepositoryFailures.join("; "));
     }
     const checksum = await sha256File(tarball);
     const relativeTarball = path.relative(workRoot, tarball);
@@ -1284,6 +1343,8 @@ export {
   parsePrepareArgs,
   parsePublishArgs,
   publishPreflight,
+  repositoryType,
+  repositoryUrl,
   resolveNextVersion,
   rewriteChangelogStatus,
   rewriteChangelogVersion,
@@ -1292,6 +1353,7 @@ export {
   rewritePackageJson,
   topologicalOrder,
   validateOwnership,
+  validateRepository,
 };
 
 if (

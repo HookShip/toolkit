@@ -18,6 +18,8 @@ import {
   parsePrepareArgs,
   parsePublishArgs,
   publishPreflight,
+  repositoryType,
+  repositoryUrl,
   resolveNextVersion,
   rewriteChangelogStatus,
   rewriteChangelogVersion,
@@ -26,6 +28,7 @@ import {
   rewritePackageJson,
   topologicalOrder,
   validateOwnership,
+  validateRepository,
 } from "./release.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -64,6 +67,128 @@ test("the manifest names this repository the sole publisher of the cohort", asyn
     names.includes("@webhook-portal/portal-components"),
     "portal-components must be owned and published by this repository",
   );
+});
+
+test("the expected repository URL is the canonical git+https remote", () => {
+  assert.equal(repositoryType, "git");
+  assert.equal(
+    repositoryUrl,
+    "git+https://github.com/HookShip/toolkit.git",
+    "the provenance URL must match the actual origin remote",
+  );
+});
+
+test("every cohort package declares exact monorepo repository provenance", async () => {
+  const manifest = await loadManifest();
+  for (const entry of manifest.openPackages) {
+    const pkg = JSON.parse(
+      await readFile(path.join(root, entry.path, "package.json"), "utf8"),
+    );
+    assert.deepEqual(
+      pkg.repository,
+      {
+        type: "git",
+        url: "git+https://github.com/HookShip/toolkit.git",
+        directory: entry.path,
+      },
+      `${entry.name} must declare its monorepo repository metadata`,
+    );
+  }
+});
+
+test("validateRepository fails closed on missing, drifted, miscased, or extra metadata", () => {
+  const directory = "packages/canonical-model";
+  const valid = {
+    type: "git",
+    url: "git+https://github.com/HookShip/toolkit.git",
+    directory,
+  };
+  assert.deepEqual(validateRepository(valid, directory, "pkg"), []);
+
+  // Missing entirely.
+  assert.ok(
+    validateRepository(undefined, directory, "pkg").some((failure) =>
+      /missing/.test(failure),
+    ),
+  );
+  // Wrong type.
+  assert.ok(
+    validateRepository({ ...valid, type: "hg" }, directory, "pkg").some(
+      (failure) => /repository\.type/.test(failure),
+    ),
+  );
+  // Casing drift in the org name must fail.
+  assert.ok(
+    validateRepository(
+      { ...valid, url: "git+https://github.com/hookship/toolkit.git" },
+      directory,
+      "pkg",
+    ).some((failure) => /repository\.url/.test(failure)),
+  );
+  // A different host/URL must fail (no invented URLs accepted).
+  assert.ok(
+    validateRepository(
+      { ...valid, url: "git+https://gitlab.com/HookShip/toolkit.git" },
+      directory,
+      "pkg",
+    ).some((failure) => /repository\.url/.test(failure)),
+  );
+  // Wrong directory.
+  assert.ok(
+    validateRepository(
+      { ...valid, directory: "packages/cli" },
+      directory,
+      "pkg",
+    ).some((failure) => /repository\.directory/.test(failure)),
+  );
+  // Missing the git+ prefix must fail (npm's canonical form is required).
+  assert.ok(
+    validateRepository(
+      { ...valid, url: "https://github.com/HookShip/toolkit.git" },
+      directory,
+      "pkg",
+    ).some((failure) => /repository\.url/.test(failure)),
+  );
+  // Extra fields (e.g. an injected homepage-style key) must fail closed.
+  assert.ok(
+    validateRepository(
+      { ...valid, homepage: "https://example.com" },
+      directory,
+      "pkg",
+    ).some((failure) => /exactly type, url, and directory/.test(failure)),
+  );
+});
+
+test("rewritePackageJson preserves repository provenance across a version bump", () => {
+  const raw = JSON.stringify(
+    {
+      name: "@webhook-portal/cli",
+      version: "0.1.0",
+      license: "Apache-2.0",
+      repository: {
+        type: "git",
+        url: "git+https://github.com/HookShip/toolkit.git",
+        directory: "packages/cli",
+      },
+      dependencies: { "@webhook-portal/signing": "workspace:*" },
+    },
+    null,
+    2,
+  );
+  const bumped = JSON.parse(
+    rewritePackageJson(
+      raw,
+      "0.1.0",
+      "0.2.0",
+      new Set(["@webhook-portal/signing"]),
+    ),
+  );
+  assert.equal(bumped.version, "0.2.0");
+  assert.deepEqual(bumped.repository, {
+    type: "git",
+    url: "git+https://github.com/HookShip/toolkit.git",
+    directory: "packages/cli",
+  });
 });
 
 test("validateOwnership rejects a drifted or absent ownership block", () => {
@@ -387,6 +512,47 @@ test("rewriteChangelogStatus flips the changelog marker in both directions", () 
   assert.throws(
     () => rewriteChangelogStatus("no marker here", "ready", "2026-07-21"),
     /Release status:/,
+  );
+});
+
+test("repeated planning is deterministic and does not mutate its input", () => {
+  const manifest = '  "releaseStatus": "unreleased",\n  "version": "0.1.0"\n';
+  const changelog =
+    "Planned package cohort: `0.1.0`.\nRelease status: unreleased.\n";
+  // Planning the same transition repeatedly yields byte-identical output, so a
+  // dry run can be re-run safely without drift.
+  assert.equal(
+    rewriteManifestStatus(manifest, "unreleased", "ready"),
+    rewriteManifestStatus(manifest, "unreleased", "ready"),
+  );
+  assert.equal(
+    rewriteChangelogStatus(changelog, "ready", "2026-07-21"),
+    rewriteChangelogStatus(changelog, "ready", "2026-07-21"),
+  );
+  assert.deepEqual(
+    publishPreflight({
+      statusPorcelain: "",
+      tag: "v0.1.0",
+      cohort: "0.1.0",
+      releaseStatus: "ready",
+      execute: true,
+    }),
+    publishPreflight({
+      statusPorcelain: "",
+      tag: "v0.1.0",
+      cohort: "0.1.0",
+      releaseStatus: "ready",
+      execute: true,
+    }),
+  );
+  // Planning never mutates its inputs.
+  assert.equal(
+    manifest,
+    '  "releaseStatus": "unreleased",\n  "version": "0.1.0"\n',
+  );
+  assert.equal(
+    changelog,
+    "Planned package cohort: `0.1.0`.\nRelease status: unreleased.\n",
   );
 });
 

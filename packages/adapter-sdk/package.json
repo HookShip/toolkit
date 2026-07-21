@@ -9,6 +9,11 @@
     "sdk"
   ],
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/HookShip/toolkit.git",
+    "directory": "packages/adapter-sdk"
+  },
   "type": "module",
   "sideEffects": false,
   "files": [

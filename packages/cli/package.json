@@ -11,6 +11,11 @@
     "standard-webhooks"
   ],
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/HookShip/toolkit.git",
+    "directory": "packages/cli"
+  },
   "type": "module",
   "sideEffects": false,
   "bin": {

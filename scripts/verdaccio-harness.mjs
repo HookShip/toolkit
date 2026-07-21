@@ -22,7 +22,15 @@
 
 import { spawn } from "node:child_process";
 import { once } from "node:events";
-import { access, mkdir, open, readdir, rm, writeFile } from "node:fs/promises";
+import {
+  access,
+  mkdir,
+  open,
+  readdir,
+  readFile,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import net from "node:net";
 import path from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -195,9 +203,27 @@ async function startVerdaccio(binary, port) {
   return child;
 }
 
-async function waitForRegistry(registry, timeoutMs = 30_000) {
+async function readLogTail() {
+  try {
+    const text = await readFile(logPath, "utf8");
+    const lines = text.trimEnd().split("\n");
+    return lines.slice(-15).join("\n");
+  } catch {
+    return "(no verdaccio log captured)";
+  }
+}
+
+// A cold first start (right after installing Verdaccio) can take much longer
+// than a warm one, so the readiness window is generous. If the process exits or
+// the window elapses, the captured log tail is surfaced for diagnosis.
+async function waitForRegistry(registry, child, timeoutMs = 90_000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
+    if (child.exitCode !== null || child.signalCode !== null) {
+      throw new Error(
+        `Verdaccio exited during startup (code ${child.exitCode}, signal ${child.signalCode}).\n${await readLogTail()}`,
+      );
+    }
     try {
       const response = await fetch(`${registry}-/ping`);
       if (response.ok) return;
@@ -206,7 +232,9 @@ async function waitForRegistry(registry, timeoutMs = 30_000) {
     }
     await sleep(300);
   }
-  throw new Error(`Verdaccio did not become ready at ${registry}`);
+  throw new Error(
+    `Verdaccio did not become ready at ${registry} within ${timeoutMs / 1000}s.\n${await readLogTail()}`,
+  );
 }
 
 async function mintToken(registry) {
@@ -377,7 +405,7 @@ async function main() {
   try {
     step(`Starting throwaway Verdaccio at ${registry}`);
     child = await startVerdaccio(binary, port);
-    await waitForRegistry(registry);
+    await waitForRegistry(registry, child);
 
     const token = await mintToken(registry);
     await writeFile(

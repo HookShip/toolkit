@@ -9,6 +9,11 @@
     "canonical-model"
   ],
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/HookShip/toolkit.git",
+    "directory": "packages/canonical-model"
+  },
   "type": "module",
   "sideEffects": false,
   "files": [

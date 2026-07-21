@@ -10,6 +10,11 @@
     "testing"
   ],
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/HookShip/toolkit.git",
+    "directory": "packages/extension-conformance"
+  },
   "type": "module",
   "sideEffects": false,
   "files": [

@@ -11,6 +11,11 @@
     "developer-tools"
   ],
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/HookShip/toolkit.git",
+    "directory": "packages/portal-components"
+  },
   "type": "module",
   "sideEffects": [
     "./styles/*.css"

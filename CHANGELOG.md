@@ -47,6 +47,11 @@ Release status: unreleased.
   state and an annotated/signed tag that matches the version and points at the
   built commit, and `check` cross-validates the manifest state against the
   changelog marker.
+- Monorepo repository provenance metadata (`type`, `url`, `directory`) on every
+  public package, matching the actual
+  `git+https://github.com/HookShip/toolkit.git` remote, enforced exactly by
+  `scripts/release.mjs check` and verified to survive packing, so npm provenance
+  is valid.
 - Tag-driven, approval-gated release workflow that runs all gates and, once
   approved, publishes with provenance and attaches artifacts, SBOM, checksums,
   and provenance as release assets.
