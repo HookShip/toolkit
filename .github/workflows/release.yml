@@ -2,11 +2,16 @@ name: Release
 
 # Tag- and approval-driven publish of the coordinated @webhook-portal cohort.
 #
-# Pushing a `vX.Y.Z` tag runs every existing gate (verify job) and then, only
-# after the protected `release` environment is approved, packs artifacts,
-# publishes the packages in dependency order with npm provenance, and attaches
-# the release assets. `workflow_dispatch` runs the gates plus a non-mutating
-# publish plan and never publishes.
+# A release is staged first (`pnpm release:stage`, which flips the manifest to
+# `releaseStatus: ready`), committed, and pushed as an annotated `vX.Y.Z` tag.
+# Pushing the tag runs every existing gate (verify job), confirms the tagged
+# source is staged, and then, only after the protected `release` environment is
+# approved, packs artifacts, publishes the packages in dependency order with npm
+# provenance, and attaches the release assets. `workflow_dispatch` runs the gates
+# plus a non-mutating publish plan and never publishes.
+#
+# publish --execute fails closed unless the source is in the `ready` state and
+# the annotated tag matches the cohort version and points at the built commit.
 #
 # No npm token is committed. Publishing uses OIDC provenance (id-token: write);
 # if the registry requires classic auth, NODE_AUTH_TOKEN is read from the
@@ -51,6 +56,14 @@ jobs:
       - run: pnpm smoke
       - run: pnpm pack:smoke
       - run: pnpm release:dry-run
+      - name: Confirm a release tag is a staged candidate
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          status="$(node -p "require('./release/manifest.json').releaseStatus")"
+          if [ "$status" != "ready" ]; then
+            echo "manifest releaseStatus is '$status'; run 'pnpm release:stage' and re-tag before releasing" >&2
+            exit 1
+          fi
       - name: Publish plan (no packages published)
         run: node scripts/release.mjs publish
       - name: Clean release artifacts

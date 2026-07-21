@@ -97,6 +97,8 @@ Release preparation and publishing are covered by
 
 ```sh
 pnpm release:prepare -- minor --dry-run  # preview an atomic coordinated bump
+pnpm release:stage -- --dry-run          # preview the unreleased -> ready transition
+pnpm release:next -- minor --dry-run     # preview reopening development after a release
 pnpm release:publish                     # non-mutating ordered publish plan
 pnpm test:verdaccio                      # publish + install the cohort against a throwaway local registry
 ```

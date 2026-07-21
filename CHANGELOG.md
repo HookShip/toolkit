@@ -42,6 +42,11 @@ Release status: unreleased.
 - Atomic, reversible `prepare`/`bump` release path and an ordered, idempotent,
   provenance-based `publish` path that fails closed on a dirty tree, tag
   mismatch, or version mismatch and never stores tokens.
+- Fail-closed release-status lifecycle (`unreleased <-> ready`) with atomic
+  `stage` and `next` transitions; `publish --execute` now requires the `ready`
+  state and an annotated/signed tag that matches the version and points at the
+  built commit, and `check` cross-validates the manifest state against the
+  changelog marker.
 - Tag-driven, approval-gated release workflow that runs all gates and, once
   approved, publishes with provenance and attaches artifacts, SBOM, checksums,
   and provenance as release assets.

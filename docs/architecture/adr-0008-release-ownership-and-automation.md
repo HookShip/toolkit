@@ -31,10 +31,15 @@ Release tooling in `scripts/release.mjs` provides:
 - an atomic, reversible `prepare`/`bump` path that rewrites the coordinated
   version across the manifest, package manifests, lockfile, and changelog, with
   a dry run and automatic rollback on failed verification;
+- a fail-closed release-status lifecycle (`unreleased <-> ready`): `stage` locks
+  a validated candidate and `next` returns to development for the next cohort
+  without touching a tag, with the manifest state and a changelog marker
+  cross-validated so they cannot drift;
 - an ordered, idempotent `publish` path that publishes in dependency order,
   skips already-published versions, uses `npm publish --provenance` (CI OIDC),
-  never stores tokens, and fails closed on a dirty tree, tag mismatch, or
-  version mismatch.
+  never stores tokens, and fails closed unless the source is `ready` with a
+  clean tree and an annotated/signed tag that matches the version and points at
+  the built commit.
 
 [`.github/workflows/release.yml`](../../.github/workflows/release.yml) drives
 releases from a `vX.Y.Z` tag behind a protected `release` environment: a verify
@@ -50,6 +55,9 @@ Verdaccio, at zero spend and with no long-running daemon.
   any of them fails `pnpm check`.
 - Releasing is a defined, reproducible sequence rather than a manual loop, and a
   failed or partial release can be safely re-run.
+- The tagged source records its own release-ready state: a release is staged
+  before tagging, `publish --execute` refuses to run from the development state,
+  and the next development cycle is reopened without mutating the released tag.
 - Credentials never live in the repository; publishing depends on an approved
   environment and OIDC, so the workflow is inert until a maintainer both tags a
   release and approves it.

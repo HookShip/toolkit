@@ -31,6 +31,8 @@ Run the narrowest relevant command while developing, then the broader gate:
 | Release metadata                     | `pnpm check:release`                          |
 | Release artifacts without publishing | `pnpm release:dry-run`                        |
 | Coordinated version bump (preview)   | `pnpm release:prepare -- <version> --dry-run` |
+| Stage a release candidate            | `pnpm release:stage -- --dry-run`             |
+| Reopen development after a release   | `pnpm release:next -- <version> --dry-run`    |
 | Ordered publish plan                 | `pnpm release:publish`                        |
 | Local registry publish + install     | `pnpm test:verdaccio`                         |
 
