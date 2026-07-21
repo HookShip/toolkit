@@ -22,6 +22,20 @@ const supportedSchemaVersion = 2;
 const semverPattern =
   /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?$/;
 
+// The release-status lifecycle. `unreleased` is normal development; `ready` is a
+// validated release candidate locked for tagging and publishing. Both are valid
+// for ordinary checks; only `ready` may be published. The changelog carries a
+// matching human- and machine-readable status marker so the two never drift.
+const releaseStatuses = new Set(["unreleased", "ready"]);
+const changelogUnreleasedStatus = "Release status: unreleased.";
+const changelogReadyStatusLine = /^Release status: ready\./m;
+const changelogAnyStatusLine =
+  /^Release status: (?:unreleased\.|ready\.[^\n]*)$/m;
+const releaseTransitions = {
+  stage: { from: "unreleased", to: "ready" },
+  "open-next": { from: "ready", to: "unreleased" },
+};
+
 // The single, machine-checked ownership contract for the public cohort. These
 // values are asserted (not merely required to exist) so that a silent edit to
 // the manifest that changes the publisher, scope, or versioning model fails the
@@ -179,9 +193,9 @@ async function check() {
     );
   }
   validateOwnership(manifest, failures);
-  if (manifest.releaseStatus !== "unreleased") {
+  if (!releaseStatuses.has(manifest.releaseStatus)) {
     failures.push(
-      "releaseStatus must remain unreleased until an actual release is approved",
+      'releaseStatus must be "unreleased" or "ready" (staged for release)',
     );
   }
   if (
@@ -302,6 +316,21 @@ async function check() {
   ) {
     failures.push(
       `CHANGELOG.md must identify the planned package cohort version (\`${coordinatedVersion}\`)`,
+    );
+  }
+  // The changelog status marker must agree with the manifest lifecycle state so
+  // a stage/reset cannot update one without the other.
+  const hasUnreleasedMarker = changelog.includes(changelogUnreleasedStatus);
+  const hasReadyMarker = changelogReadyStatusLine.test(changelog);
+  if (!changelogAnyStatusLine.test(changelog)) {
+    failures.push('CHANGELOG.md must contain a "Release status:" marker line');
+  } else if (manifest.releaseStatus === "unreleased" && !hasUnreleasedMarker) {
+    failures.push(
+      'CHANGELOG.md must record "Release status: unreleased." while the manifest is unreleased',
+    );
+  } else if (manifest.releaseStatus === "ready" && !hasReadyMarker) {
+    failures.push(
+      'CHANGELOG.md must record "Release status: ready." while the manifest is ready',
     );
   }
 
@@ -635,6 +664,98 @@ function rewriteChangelogVersion(raw, oldVersion, nextVersion) {
   return raw.replaceAll(marker, `Planned package cohort: \`${nextVersion}\``);
 }
 
+function todayIso() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+// Flips the manifest lifecycle marker, refusing to run unless it currently holds
+// the expected value (so a double transition fails closed instead of silently
+// mangling the file).
+function rewriteManifestStatus(raw, from, to) {
+  const pattern = new RegExp(`("releaseStatus": ")${from}(")`);
+  if (!pattern.test(raw)) {
+    throw new Error(`manifest releaseStatus is not "${from}"`);
+  }
+  return raw.replace(pattern, `$1${to}$2`);
+}
+
+// Flips the changelog status marker to match the manifest lifecycle state.
+function rewriteChangelogStatus(raw, to, date) {
+  if (!changelogAnyStatusLine.test(raw)) {
+    throw new Error('CHANGELOG.md is missing a "Release status:" marker line');
+  }
+  const line =
+    to === "ready"
+      ? `Release status: ready. Staged ${date}.`
+      : changelogUnreleasedStatus;
+  return raw.replace(changelogAnyStatusLine, line);
+}
+
+// Confirms a lifecycle transition is legal for the current status, throwing a
+// clear error otherwise. Returns the transition descriptor.
+function assertTransitionAllowed(action, currentStatus) {
+  const transition = releaseTransitions[action];
+  if (!transition) throw new Error(`unknown transition ${action}`);
+  if (currentStatus !== transition.from) {
+    throw new Error(
+      `cannot ${action}: releaseStatus is "${currentStatus}" (expected "${transition.from}")`,
+    );
+  }
+  return transition;
+}
+
+async function requireCleanTree(action) {
+  const status = await gitValue(["status", "--porcelain"]);
+  if (status === null) {
+    throw new Error(`cannot ${action}: unable to read git status`);
+  }
+  if (status.trim() !== "") {
+    throw new Error(
+      `cannot ${action}: refusing to ${action} from a dirty tree`,
+    );
+  }
+}
+
+// Writes a plan atomically: snapshot every file (and the lockfile when versions
+// move), write the changes, verify, and restore the snapshot if verification
+// throws so a failed transition never leaves a partial tree. `verify` is
+// injectable for testing; it defaults to the full consistency check.
+async function applyPlan(plan, { refreshLockfile, verify = check }) {
+  const changed = plan.filter((edit) => edit.before !== edit.after);
+  const snapshots = plan.map((edit) => ({
+    relative: edit.relative,
+    before: edit.before,
+  }));
+  const lockRelative = "pnpm-lock.yaml";
+  if (refreshLockfile) {
+    snapshots.push({
+      relative: lockRelative,
+      before: await readFile(path.join(root, lockRelative), "utf8"),
+    });
+  }
+  const restore = async () => {
+    for (const snapshot of snapshots) {
+      await writeFile(path.join(root, snapshot.relative), snapshot.before);
+    }
+  };
+  try {
+    for (const edit of changed) {
+      await writeFile(path.join(root, edit.relative), edit.after);
+    }
+    if (refreshLockfile) {
+      await run("pnpm", ["install", "--lockfile-only"], { quiet: true });
+    }
+    await verify();
+  } catch (error) {
+    await restore();
+    throw new Error(
+      `release update failed and was rolled back: ${error.message}`,
+      { cause: error },
+    );
+  }
+  return changed;
+}
+
 // Builds the ordered list of file edits for a bump without touching disk beyond
 // reads. Each edit records before/after so a caller can preview, apply, or
 // restore atomically.
@@ -693,38 +814,122 @@ async function prepare({ spec, dryRun }) {
     return;
   }
 
-  // Snapshot everything we may touch (the planned files and the lockfile) so a
-  // failure anywhere below restores the tree to exactly its prior state.
-  const lockRelative = "pnpm-lock.yaml";
-  const lockBefore = await readFile(path.join(root, lockRelative), "utf8");
-  const snapshots = [
-    ...plan.map((edit) => ({ relative: edit.relative, before: edit.before })),
-    { relative: lockRelative, before: lockBefore },
-  ];
-  const restore = async () => {
-    for (const snapshot of snapshots) {
-      await writeFile(path.join(root, snapshot.relative), snapshot.before);
-    }
-  };
-
-  try {
-    for (const edit of changed) {
-      await writeFile(path.join(root, edit.relative), edit.after);
-    }
-    // Refresh the lockfile so it stays consistent with the new versions. This
-    // is offline and a no-op while internal ranges use workspace:*, but keeps
-    // the path correct if a pinned range is ever introduced.
-    await run("pnpm", ["install", "--lockfile-only"], { quiet: true });
-    await check();
-  } catch (error) {
-    await restore();
-    throw new Error(`prepare failed and was rolled back: ${error.message}`, {
-      cause: error,
-    });
-  }
+  await applyPlan(plan, { refreshLockfile: true });
 
   console.log(
     `Prepared release ${nextVersion}. Review the diff; revert with "git checkout -- ." if needed.`,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Release-status lifecycle: unreleased <-> ready
+//
+// `stage` locks a validated release candidate (unreleased -> ready) so the
+// tagged source records a release-ready state; `open-next` returns the cohort to
+// development for the next version (ready -> unreleased) without touching any
+// tag. Both are atomic, reversible, and fail closed on an illegal transition or
+// (for a real apply) a dirty tree.
+// ---------------------------------------------------------------------------
+
+async function stageRelease({ dryRun }) {
+  const manifest = await loadManifest();
+  assertTransitionAllowed("stage", manifest.releaseStatus);
+  const cohort = cohortVersion(manifest);
+
+  const manifestRaw = await readFile(manifestPath, "utf8");
+  const changelogRaw = await readFile(path.join(root, "CHANGELOG.md"), "utf8");
+  const plan = [
+    {
+      relative: "release/manifest.json",
+      before: manifestRaw,
+      after: rewriteManifestStatus(manifestRaw, "unreleased", "ready"),
+    },
+    {
+      relative: "CHANGELOG.md",
+      before: changelogRaw,
+      after: rewriteChangelogStatus(changelogRaw, "ready", todayIso()),
+    },
+  ];
+  const changed = plan.filter((edit) => edit.before !== edit.after);
+
+  console.log(
+    `Staging cohort ${cohort} as a release candidate (unreleased -> ready), ${changed.length} file(s):`,
+  );
+  for (const edit of changed) console.log(`  update ${edit.relative}`);
+
+  if (dryRun) {
+    console.log("Dry run: no files written.");
+    return;
+  }
+
+  // A release candidate must be staged from a clean, already-consistent tree.
+  await requireCleanTree("stage");
+  await check();
+  await applyPlan(plan, { refreshLockfile: false });
+
+  console.log(
+    `Staged ${cohort}. Commit, then create an annotated tag v${cohort}. Revert with "git checkout -- ." if needed.`,
+  );
+}
+
+async function openNextDevelopment({ spec, dryRun }) {
+  if (!spec) {
+    throw new Error(
+      "usage: node scripts/release.mjs next <version|major|minor|patch> [--dry-run]",
+    );
+  }
+  const manifest = await loadManifest();
+  assertTransitionAllowed("open-next", manifest.releaseStatus);
+  const current = cohortVersion(manifest);
+  const nextVersion = resolveNextVersion(current, spec);
+  const names = new Set(manifest.openPackages.map((entry) => entry.name));
+
+  const plan = [];
+  const manifestRaw = await readFile(manifestPath, "utf8");
+  plan.push({
+    relative: "release/manifest.json",
+    before: manifestRaw,
+    after: rewriteManifestStatus(
+      rewriteManifestVersions(manifestRaw, current, nextVersion),
+      "ready",
+      "unreleased",
+    ),
+  });
+  for (const entry of manifest.openPackages) {
+    const relative = `${entry.path}/package.json`;
+    const before = await readFile(path.join(root, relative), "utf8");
+    plan.push({
+      relative,
+      before,
+      after: rewritePackageJson(before, current, nextVersion, names),
+    });
+  }
+  const changelogRaw = await readFile(path.join(root, "CHANGELOG.md"), "utf8");
+  plan.push({
+    relative: "CHANGELOG.md",
+    before: changelogRaw,
+    after: rewriteChangelogStatus(
+      rewriteChangelogVersion(changelogRaw, current, nextVersion),
+      "unreleased",
+    ),
+  });
+  const changed = plan.filter((edit) => edit.before !== edit.after);
+
+  console.log(
+    `Opening next development ${current} (ready) -> ${nextVersion} (unreleased), ${changed.length} file(s):`,
+  );
+  for (const edit of changed) console.log(`  update ${edit.relative}`);
+
+  if (dryRun) {
+    console.log("Dry run: no files written, lockfile untouched.");
+    return;
+  }
+
+  await requireCleanTree("open next development");
+  await applyPlan(plan, { refreshLockfile: true });
+
+  console.log(
+    `Opened development on ${nextVersion} (unreleased). No tag was touched.`,
   );
 }
 
@@ -807,12 +1012,28 @@ async function internalDependencyGraph(manifest) {
   return graph;
 }
 
-function publishPreflight({ statusPorcelain, tag, cohort }) {
+function publishPreflight({
+  statusPorcelain,
+  tag,
+  cohort,
+  releaseStatus,
+  execute,
+}) {
   const failures = [];
   if (statusPorcelain === null) {
     failures.push("could not read git status to verify a clean tree");
   } else if (statusPorcelain.trim() !== "") {
     failures.push("refusing to publish from a dirty working tree");
+  }
+  if (execute && releaseStatus !== "ready") {
+    failures.push(
+      `refusing to publish: releaseStatus is "${releaseStatus}" (stage the release with "release.mjs stage" first)`,
+    );
+  }
+  if (execute && tag === undefined) {
+    failures.push(
+      "refusing to publish: an annotated --tag vX.Y.Z is required for --execute",
+    );
   }
   if (tag !== undefined && tag !== `v${cohort}` && tag !== cohort) {
     failures.push(
@@ -820,6 +1041,32 @@ function publishPreflight({ statusPorcelain, tag, cohort }) {
     );
   }
   return failures;
+}
+
+// Confirms the release tag is an annotated (or signed) tag that points at the
+// commit being published. Lightweight tags and tags that do not point at HEAD
+// fail closed. Returns { failures, signed }.
+async function verifyReleaseTag(tag) {
+  const failures = [];
+  const type = (await capture("git", ["cat-file", "-t", tag])).stdout.trim();
+  if (type !== "tag") {
+    failures.push(
+      `tag ${tag} must be an annotated or signed tag (found ${type || "no tag object"})`,
+    );
+    return { failures, signed: false };
+  }
+  const contents = await capture("git", ["cat-file", "-p", tag]);
+  const signed = contents.stdout.includes("-----BEGIN PGP SIGNATURE-----");
+  const tagCommit = (
+    await capture("git", ["rev-parse", `${tag}^{commit}`])
+  ).stdout.trim();
+  const head = (
+    await capture("git", ["rev-parse", "HEAD^{commit}"])
+  ).stdout.trim();
+  if (tagCommit === "" || head === "" || tagCommit !== head) {
+    failures.push(`tag ${tag} must point at the commit being published (HEAD)`);
+  }
+  return { failures, signed };
 }
 
 // True only when the exact name@version already exists on the registry. A 404
@@ -900,9 +1147,29 @@ async function publishCohort(options) {
   await check();
 
   const status = await gitValue(["status", "--porcelain"]);
-  const failures = publishPreflight({ statusPorcelain: status, tag, cohort });
+  const failures = publishPreflight({
+    statusPorcelain: status,
+    tag,
+    cohort,
+    releaseStatus: manifest.releaseStatus,
+    execute,
+  });
   if (failures.length > 0) {
     throw new Error(`Publish preflight failed:\n- ${failures.join("\n- ")}`);
+  }
+
+  // For a real publish, the tag itself must be annotated/signed and point at the
+  // commit being published.
+  if (execute) {
+    const { failures: tagFailures, signed } = await verifyReleaseTag(tag);
+    if (tagFailures.length > 0) {
+      throw new Error(
+        `Publish preflight failed:\n- ${tagFailures.join("\n- ")}`,
+      );
+    }
+    console.log(
+      `Release tag ${tag} verified (${signed ? "signed" : "annotated"}, points at HEAD).`,
+    );
   }
 
   const order = topologicalOrder(await internalDependencyGraph(manifest));
@@ -982,6 +1249,14 @@ async function main() {
   if (command === "prepare" || command === "bump") {
     return prepare(parsePrepareArgs(process.argv.slice(3)));
   }
+  if (command === "stage" || command === "ready") {
+    return stageRelease({
+      dryRun: process.argv.slice(3).includes("--dry-run"),
+    });
+  }
+  if (command === "next" || command === "open-next") {
+    return openNextDevelopment(parsePrepareArgs(process.argv.slice(3)));
+  }
   if (command === "publish") {
     return publishCohort(parsePublishArgs(process.argv.slice(3)));
   }
@@ -992,11 +1267,13 @@ async function main() {
     return;
   }
   throw new Error(
-    "usage: node scripts/release.mjs [check|list-packages|prepare|bump|publish|artifacts|dry-run|clean]",
+    "usage: node scripts/release.mjs [check|list-packages|prepare|bump|stage|next|publish|artifacts|dry-run|clean]",
   );
 }
 
 export {
+  applyPlan,
+  assertTransitionAllowed,
   bumpDependencyRange,
   check,
   cohortVersion,
@@ -1008,7 +1285,9 @@ export {
   parsePublishArgs,
   publishPreflight,
   resolveNextVersion,
+  rewriteChangelogStatus,
   rewriteChangelogVersion,
+  rewriteManifestStatus,
   rewriteManifestVersions,
   rewritePackageJson,
   topologicalOrder,

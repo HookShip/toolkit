@@ -13,6 +13,8 @@ No package has been tagged or published yet.
 Planned package cohort: `0.1.0`. This is release preparation only; no package,
 tag, or release has been published.
 
+Release status: unreleased.
+
 ### Added
 
 - Canonical webhook contract model and deterministic JSON utilities.

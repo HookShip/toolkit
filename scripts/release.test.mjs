@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 import {
+  applyPlan,
+  assertTransitionAllowed,
   bumpDependencyRange,
   check,
   cohortVersion,
@@ -17,7 +19,9 @@ import {
   parsePublishArgs,
   publishPreflight,
   resolveNextVersion,
+  rewriteChangelogStatus,
   rewriteChangelogVersion,
+  rewriteManifestStatus,
   rewriteManifestVersions,
   rewritePackageJson,
   topologicalOrder,
@@ -260,6 +264,7 @@ test("the real cohort graph is acyclic and publishes deps before dependents", as
 });
 
 test("publishPreflight fails closed on a dirty tree, unreadable status, or tag mismatch", () => {
+  // Plan mode (execute: false) with a clean tree and no tag is fine.
   assert.deepEqual(
     publishPreflight({ statusPorcelain: "", tag: undefined, cohort: "0.1.0" }),
     [],
@@ -289,6 +294,134 @@ test("publishPreflight fails closed on a dirty tree, unreadable status, or tag m
       cohort: "0.1.0",
     }).some((failure) => /does not match cohort version/.test(failure)),
   );
+});
+
+test("publishPreflight execute requires the ready state and a matching tag", () => {
+  // A staged, clean, correctly-tagged execute passes.
+  assert.deepEqual(
+    publishPreflight({
+      statusPorcelain: "",
+      tag: "v0.1.0",
+      cohort: "0.1.0",
+      releaseStatus: "ready",
+      execute: true,
+    }),
+    [],
+  );
+  // Executing from the development state is refused.
+  assert.ok(
+    publishPreflight({
+      statusPorcelain: "",
+      tag: "v0.1.0",
+      cohort: "0.1.0",
+      releaseStatus: "unreleased",
+      execute: true,
+    }).some((failure) => /releaseStatus is "unreleased"/.test(failure)),
+  );
+  // Executing without a tag is refused.
+  assert.ok(
+    publishPreflight({
+      statusPorcelain: "",
+      tag: undefined,
+      cohort: "0.1.0",
+      releaseStatus: "ready",
+      execute: true,
+    }).some((failure) => /--tag vX\.Y\.Z is required/.test(failure)),
+  );
+  // The ready gate does not apply to a non-mutating plan.
+  assert.deepEqual(
+    publishPreflight({
+      statusPorcelain: "",
+      tag: undefined,
+      cohort: "0.1.0",
+      releaseStatus: "unreleased",
+      execute: false,
+    }),
+    [],
+  );
+});
+
+test("assertTransitionAllowed enforces the lifecycle direction", () => {
+  assert.deepEqual(assertTransitionAllowed("stage", "unreleased"), {
+    from: "unreleased",
+    to: "ready",
+  });
+  assert.deepEqual(assertTransitionAllowed("open-next", "ready"), {
+    from: "ready",
+    to: "unreleased",
+  });
+  // Staging a already-staged cohort, or opening development from a development
+  // state, are both invalid transitions.
+  assert.throws(
+    () => assertTransitionAllowed("stage", "ready"),
+    /releaseStatus is "ready"/,
+  );
+  assert.throws(
+    () => assertTransitionAllowed("open-next", "unreleased"),
+    /releaseStatus is "unreleased"/,
+  );
+});
+
+test("rewriteManifestStatus flips the marker and refuses a double transition", () => {
+  const raw = '  "releaseStatus": "unreleased",\n';
+  const staged = rewriteManifestStatus(raw, "unreleased", "ready");
+  assert.equal(staged, '  "releaseStatus": "ready",\n');
+  assert.equal(
+    rewriteManifestStatus(staged, "ready", "unreleased"),
+    '  "releaseStatus": "unreleased",\n',
+  );
+  // Repeating a transition after it already happened fails closed.
+  assert.throws(
+    () => rewriteManifestStatus(staged, "unreleased", "ready"),
+    /releaseStatus is not "unreleased"/,
+  );
+});
+
+test("rewriteChangelogStatus flips the changelog marker in both directions", () => {
+  const dev = "before\nRelease status: unreleased.\nafter\n";
+  const ready = rewriteChangelogStatus(dev, "ready", "2026-07-21");
+  assert.match(ready, /^Release status: ready\. Staged 2026-07-21\.$/m);
+  assert.doesNotMatch(ready, /Release status: unreleased\./);
+  const back = rewriteChangelogStatus(ready, "unreleased");
+  assert.match(back, /^Release status: unreleased\.$/m);
+  assert.throws(
+    () => rewriteChangelogStatus("no marker here", "ready", "2026-07-21"),
+    /Release status:/,
+  );
+});
+
+test("applyPlan writes on success and rolls every file back on verify failure", async () => {
+  const rel = ".release-lifecycle-rollback-test.tmp";
+  const file = path.join(root, rel);
+  await writeFile(file, "ORIGINAL");
+
+  // Success path: the file is updated and verification is invoked.
+  let verified = 0;
+  const changed = await applyPlan(
+    [{ relative: rel, before: "ORIGINAL", after: "UPDATED" }],
+    {
+      refreshLockfile: false,
+      verify: async () => {
+        verified += 1;
+      },
+    },
+  );
+  assert.equal(changed.length, 1);
+  assert.equal(verified, 1);
+  assert.equal(await readFile(file, "utf8"), "UPDATED");
+
+  // Failure path: a throwing verify restores the pre-write content.
+  await assert.rejects(
+    applyPlan([{ relative: rel, before: "UPDATED", after: "BROKEN" }], {
+      refreshLockfile: false,
+      verify: async () => {
+        throw new Error("verification failed");
+      },
+    }),
+    /rolled back/,
+  );
+  assert.equal(await readFile(file, "utf8"), "UPDATED");
+  await rm(file);
 });
 
 test("parsePublishArgs reads flags, inline values, and rejects unknown options", () => {

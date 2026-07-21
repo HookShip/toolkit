@@ -1,6 +1,11 @@
 .cache
 .next
+.pack-smoke-work
+.release-work
+.setup-lifecycle-test
+.smoke-work
 .turbo
+.verdaccio-work
 coverage
 dist
 node_modules
