@@ -167,7 +167,8 @@ curl --fail --cacert infra/certs/ca.crt \
 
 PostgreSQL and MinIO publish no host ports. The application binds to loopback,
 waits for the one-shot migration service, and uses a separate egress network for
-explicit destination calls. See [`infra/README.md`](infra/README.md).
+explicit destination calls. See [`infra/README.md`](infra/README.md) for setup
+and [`infra/OPERATIONS.md`](infra/OPERATIONS.md) for the operator runbook.
 
 ## Security model
 
@@ -226,6 +227,7 @@ release/     coordinated public package manifest
 - [`docs/org-context.md`](docs/org-context.md)
 - [`docs/release-policy.md`](docs/release-policy.md)
 - [`docs/compatibility-matrix.md`](docs/compatibility-matrix.md)
+- [`docs/generated-artifacts.md`](docs/generated-artifacts.md)
 - [`docs/architecture/README.md`](docs/architecture/README.md)
 
 Licensed under [Apache-2.0](LICENSE).

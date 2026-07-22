@@ -6,6 +6,10 @@ only the internal backend network. The app publishes on `127.0.0.1`, joins the
 backend, and separately joins an egress-capable network so public webhook
 destinations remain reachable. MinIO's console is not exposed.
 
+Day-two operation — upgrade/reset, backup and restore, rollback, recovery and
+troubleshooting, local/SSH access, and what is deliberately unsupported before a
+release — is documented in [`OPERATIONS.md`](OPERATIONS.md).
+
 ## First run
 
 ```sh

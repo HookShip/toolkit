@@ -78,3 +78,14 @@ release process.
 [`apps/reference-server`](../apps/reference-server) is a private Apache-2.0
 packaging wrapper around `@webhook-portal/cli/reference-server`. It is not part
 of the published cohort and has no npm release version.
+
+## Provenance
+
+This matrix is **derived from the package manifests, not hand-asserted**. The
+scope, versions, internal dependencies, peer requirements, Node engine, and
+repository provenance are the values in each `packages/*/package.json`, and
+`node scripts/release.mjs check` fails closed if any package drifts from them.
+The publish order is recomputed from the manifest's dependency graph on every
+run rather than transcribed here. When a manifest changes, regenerate the
+affected rows and let the release check confirm them. See
+[`generated-artifacts.md`](generated-artifacts.md).

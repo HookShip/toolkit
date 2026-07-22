@@ -26,3 +26,23 @@ public toolkit.
 The numbering preserves the decisions inherited by this history-filtered public
 extraction. Missing numbers refer to decisions that are not part of this
 repository and are intentionally not referenced here.
+
+## Lineage
+
+ADRs form an auditable lineage, consistent with the organization
+[source-of-truth policy](https://github.com/HookShip/.github/blob/main/SOURCE_OF_TRUTH.md):
+
+- A decision that replaces an earlier one sets the earlier record's status to
+  `Superseded` and links forward to its successor; the superseded record is kept
+  and never edited to hide the change or deleted. The successor links back to
+  what it supersedes.
+- This repository owns the ADRs for public foundation decisions — packages,
+  contracts, signing, adapters, extensions, and release automation. A protocol
+  or data-plane decision is owned by
+  [`hook-service`](https://github.com/HookShip/hook-service), and a private
+  control-plane decision by `platform`.
+- A decision that spans repositories records the primary ADR in the owning
+  repository; companion records elsewhere link to it and do not restate its
+  rationale. The primary ADR is the source of truth.
+- Organization-wide governance decisions that are not specific to one product
+  repository live in the `.github` repository, not here.

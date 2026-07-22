@@ -74,3 +74,13 @@ When coverage intentionally improves or the source scope changes, run the root
 command, review `coverage/coverage-summary.json`, update
 `scripts/coverage.config.mjs`, and update this table in the same change.
 Lowering a floor requires an explicit justification.
+
+## Provenance
+
+These figures are **measured, not asserted**. `pnpm test:coverage` instruments
+the real sources with Vitest's V8 provider and enforces the floors in
+`scripts/coverage.config.mjs`; the table records what that run produced on the
+stated date and toolchain. The reports themselves are generated output and are
+git-ignored under `coverage/`, so the committed source is the config and this
+table, not the numbers' backing files. See
+[`generated-artifacts.md`](generated-artifacts.md).

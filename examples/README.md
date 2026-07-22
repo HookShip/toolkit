@@ -62,3 +62,18 @@ Cleanup is deliberately separate:
 ./examples/demo-cleanup.sh
 ./examples/demo-cleanup.sh --volumes # also erase local data
 ```
+
+## Provenance
+
+Every input here is **handwritten and synthetic**. The contracts, metadata
+observations, and learning inputs describe a fictional order webhook family and
+contain no real customer data, payloads, headers, endpoint URLs, credentials, or
+personal data — the metadata samples are metadata-only by construction. Example
+destinations use reserved documentation domains (`example.com`,
+`*.example.internal`) and loopback addresses, never a real endpoint.
+
+These files are source inputs, not generated output: the CLI reads them to
+produce fixtures, types, reports, and evidence, and that output is not
+committed. See
+[`../docs/generated-artifacts.md`](../docs/generated-artifacts.md) for the
+generated-versus-handwritten policy.
