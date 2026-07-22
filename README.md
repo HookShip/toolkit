@@ -10,6 +10,12 @@ This repository contains only the public toolkit. It has no dependency on a
 hosted service, managed control plane, private package, customer environment, or
 external infrastructure beyond the optional local reference stack.
 
+HookShip spans four repositories with distinct ownership. This toolkit is the
+public foundation; the portable outbound webhook **delivery data plane** lives
+in [`hook-service`](https://github.com/HookShip/hook-service), and the managed
+control plane is private. See [`docs/org-context.md`](docs/org-context.md) for
+placement, source-of-truth, and release policies.
+
 > Package names intentionally remain under `@webhook-portal/*`. The `@hookship`
 > npm scope is not yet authenticated or reserved, so published package scopes
 > must not be renamed yet.
@@ -217,6 +223,7 @@ release/     coordinated public package manifest
 - [`SUPPORT.md`](SUPPORT.md)
 - [`SECURITY.md`](SECURITY.md)
 - [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md)
+- [`docs/org-context.md`](docs/org-context.md)
 - [`docs/release-policy.md`](docs/release-policy.md)
 - [`docs/compatibility-matrix.md`](docs/compatibility-matrix.md)
 - [`docs/architecture/README.md`](docs/architecture/README.md)
