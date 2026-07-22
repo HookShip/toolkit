@@ -69,7 +69,16 @@ import {
   parseCommandArguments,
   stringOption,
 } from "./arguments.js";
-import { CliCommandError, type CliDependencies } from "./commands.js";
+import {
+  CONTRACT_LIMIT_BYTES,
+  READ_TIMEOUT_MILLISECONDS,
+  CliCommandError,
+  commandOutput,
+  ensurePositionals,
+  resolveInputPath,
+  resolveOutputPath,
+  type CliDependencies,
+} from "./command-support.js";
 import { CLI_EXIT_CODES, type CliExitCode } from "./exit-codes.js";
 import {
   assertSingleStdinConsumer,
@@ -79,42 +88,11 @@ import {
 } from "./io.js";
 import { emitSuccess } from "./output.js";
 
-const CONTRACT_LIMIT_BYTES = 4 * 1024 * 1024;
 const STRUCTURED_LIMIT_BYTES = 1024 * 1024;
 const KEY_LIMIT_BYTES = 16 * 1024;
-const READ_TIMEOUT_MILLISECONDS = 5000;
 const DEFAULT_EVIDENCE_LIFETIME_MS = 7 * 24 * 60 * 60 * 1000;
 
 type ArtifactFormat = "json" | "markdown";
-
-function commandOutput(dependencies: CliDependencies, json: boolean) {
-  return {
-    json,
-    stdout: dependencies.stdout,
-    stderr: dependencies.stderr,
-  };
-}
-
-function resolveInputPath(cwd: string, value: string): string {
-  return value === "-" ? value : path.resolve(cwd, value);
-}
-
-function resolveOutputPath(cwd: string, value: string): string {
-  return path.resolve(cwd, value);
-}
-
-function ensurePositionals(
-  positionals: readonly string[],
-  expected: number,
-): void {
-  if (positionals.length !== expected) {
-    throw new CliCommandError(
-      CLI_EXIT_CODES.usage,
-      "USAGE_ERROR",
-      `Expected ${expected} positional argument(s).`,
-    );
-  }
-}
 
 function requiredOption(
   values: Readonly<Record<string, boolean | string | undefined>>,

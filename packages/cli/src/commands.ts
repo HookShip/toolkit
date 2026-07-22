@@ -2,7 +2,6 @@
 
 import { randomUUID } from "node:crypto";
 import path from "node:path";
-import type { Readable, Writable } from "node:stream";
 import type { ParseArgsOptionsConfig } from "node:util";
 
 import {
@@ -12,10 +11,7 @@ import {
   type MetadataDeliveryAttemptInput,
   type ScopedCredential,
 } from "@webhook-portal/adapter-sdk";
-import {
-  nodeHttpTransport,
-  type HttpTransport,
-} from "@webhook-portal/adapter-generic-http";
+import { nodeHttpTransport } from "@webhook-portal/adapter-generic-http";
 import {
   canonicalize,
   diff,
@@ -39,6 +35,18 @@ import {
   parseCommandArguments,
   stringOption,
 } from "./arguments.js";
+import {
+  CliCommandError,
+  CONTRACT_LIMIT_BYTES,
+  READ_TIMEOUT_MILLISECONDS,
+  commandOutput,
+  ensurePositionals,
+  optionSpec,
+  resolveInputPath,
+  resolveOutputPath,
+  streams,
+  type CliDependencies,
+} from "./command-support.js";
 import { resolveSafeDestination } from "./destination.js";
 import { selectCanonicalEventVersion } from "./event-version.js";
 import { CLI_EXIT_CODES, type CliExitCode } from "./exit-codes.js";
@@ -57,7 +65,6 @@ import {
   readInputText,
   safeErrorMessage,
   StdinSourceConflictError,
-  type CliStreams,
 } from "./io.js";
 import {
   compatibilityReportCommand,
@@ -75,85 +82,13 @@ import { publishRequestFingerprint } from "./reference-server/service.js";
 import { readSecret } from "./secrets.js";
 import type { SecretSourceOptions } from "./secrets.js";
 
-const CONTRACT_LIMIT_BYTES = 4 * 1024 * 1024;
+export {
+  CliCommandError,
+  type CliDependencies,
+} from "./command-support.js";
+
 const GENERAL_LIMIT_BYTES = 1024 * 1024;
 const TEST_BODY_LIMIT_BYTES = 256 * 1024;
-const READ_TIMEOUT_MILLISECONDS = 5000;
-
-export interface CliDependencies {
-  readonly cwd: string;
-  readonly environment: NodeJS.ProcessEnv;
-  readonly stdin: Readable;
-  readonly stdout: Writable;
-  readonly stderr: Writable;
-  readonly fetchImplementation?: typeof fetch;
-  readonly httpTransport?: HttpTransport;
-  readonly idFactory?: () => string;
-  readonly now?: () => Date;
-  readonly startServer?: typeof startReferenceServerFromEnv;
-  readonly migrateServer?: typeof migrateReferenceServerFromEnv;
-}
-
-export class CliCommandError extends Error {
-  readonly exitCode: CliExitCode;
-  readonly code: string;
-  readonly details: unknown;
-
-  constructor(
-    exitCode: CliExitCode,
-    code: string,
-    message: string,
-    details?: unknown,
-  ) {
-    super(message);
-    this.name = "CliCommandError";
-    this.exitCode = exitCode;
-    this.code = code;
-    this.details = details;
-  }
-}
-
-function streams(dependencies: CliDependencies): CliStreams {
-  return {
-    stdin: dependencies.stdin,
-    stdout: dependencies.stdout,
-    stderr: dependencies.stderr,
-  };
-}
-
-function resolveInputPath(cwd: string, value: string): string {
-  return value === "-" ? value : path.resolve(cwd, value);
-}
-
-function resolveOutputPath(cwd: string, value: string): string {
-  return path.resolve(cwd, value);
-}
-
-function ensurePositionals(
-  positionals: readonly string[],
-  minimum: number,
-  maximum = minimum,
-): void {
-  if (positionals.length < minimum || positionals.length > maximum) {
-    throw new CliCommandError(
-      CLI_EXIT_CODES.usage,
-      "USAGE_ERROR",
-      `Expected ${minimum === maximum ? minimum : `${minimum}-${maximum}`} positional argument(s).`,
-    );
-  }
-}
-
-function optionSpec(extra: ParseArgsOptionsConfig): ParseArgsOptionsConfig {
-  return extra;
-}
-
-function commandOutput(dependencies: CliDependencies, json: boolean) {
-  return {
-    json,
-    stdout: dependencies.stdout,
-    stderr: dependencies.stderr,
-  };
-}
 
 function statusExit(result: ContractImportResult): CliExitCode {
   if (result.status === "invalid") {
