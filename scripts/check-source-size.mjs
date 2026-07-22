@@ -24,7 +24,7 @@ export const allowlist = new Map([
   ["packages/adapter-conformance/src/harness.ts", 1365],
   ["packages/adapter-generic-http/src/adapter.ts", 2100],
   ["packages/adapter-sdk/src/metadata.ts", 1102],
-  ["packages/cli/src/commands.ts", 1775],
+  ["packages/cli/src/commands.ts", 1696],
   ["packages/cli/src/learning-commands.ts", 1967],
   ["packages/cli/src/reference-server/memory-repository.ts", 1786],
   ["packages/cli/src/reference-server/migrations.ts", 1385],

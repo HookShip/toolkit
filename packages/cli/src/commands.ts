@@ -73,19 +73,13 @@ import {
   supportEvidenceVerifyCommand,
 } from "./learning-commands.js";
 import { emitFailure, emitSuccess } from "./output.js";
-import {
-  migrateReferenceServerFromEnv,
-  startReferenceServerFromEnv,
-  type RunningReferenceServer,
-} from "./reference-server/runtime.js";
 import { publishRequestFingerprint } from "./reference-server/service.js";
 import { readSecret } from "./secrets.js";
 import type { SecretSourceOptions } from "./secrets.js";
+import { migrateCommand, serveCommand } from "./server-commands.js";
 
-export {
-  CliCommandError,
-  type CliDependencies,
-} from "./command-support.js";
+export { CliCommandError, type CliDependencies } from "./command-support.js";
+export { migrateCommand, serveCommand };
 
 const GENERAL_LIMIT_BYTES = 1024 * 1024;
 const TEST_BODY_LIMIT_BYTES = 256 * 1024;
@@ -1531,82 +1525,6 @@ export async function timelineCommand(
           return `${String(eventVersion["eventType"] ?? "unknown")} ${String(current["status"] ?? "unknown")} ${String(current["occurredAt"] ?? "")} — ${item["payloadRetained"] === true ? "payload retained locally" : "payload not stored"}`;
         }),
   );
-  return CLI_EXIT_CODES.success;
-}
-
-export async function migrateCommand(
-  args: readonly string[],
-  dependencies: CliDependencies,
-): Promise<CliExitCode> {
-  const parsed = parseCommandArguments(args);
-  ensurePositionals(parsed.positionals, 0);
-  const applied = await (
-    dependencies.migrateServer ?? migrateReferenceServerFromEnv
-  )(dependencies.environment);
-  emitSuccess(
-    commandOutput(dependencies, booleanOption(parsed.values, "json")),
-    { command: "migrate", applied },
-    [
-      applied.length === 0
-        ? "Database schema is already current."
-        : `Applied migration(s): ${applied.join(", ")}`,
-    ],
-  );
-  return CLI_EXIT_CODES.success;
-}
-
-async function waitForShutdown(running: RunningReferenceServer): Promise<void> {
-  await new Promise<void>((resolve, reject) => {
-    let closing = false;
-    const shutdown = (): void => {
-      if (closing) {
-        return;
-      }
-      closing = true;
-      void running.close().then(resolve, reject);
-    };
-    process.once("SIGINT", shutdown);
-    process.once("SIGTERM", shutdown);
-  });
-}
-
-export async function serveCommand(
-  args: readonly string[],
-  dependencies: CliDependencies,
-): Promise<CliExitCode> {
-  const parsed = parseCommandArguments(args, {
-    host: { type: "string" },
-    port: { type: "string" },
-    "allow-local-network": { type: "boolean" },
-    migrate: { type: "boolean" },
-  });
-  ensurePositionals(parsed.positionals, 0);
-  const running = await (
-    dependencies.startServer ?? startReferenceServerFromEnv
-  )({
-    environment: dependencies.environment,
-    autoMigrate: booleanOption(parsed.values, "migrate"),
-    configOverrides: {
-      ...(() => {
-        const host = stringOption(parsed.values, "host");
-        return host === undefined ? {} : { host };
-      })(),
-      ...(stringOption(parsed.values, "port") === undefined
-        ? {}
-        : {
-            port: integerOption(parsed.values, "port", 3210, 0, 65_535),
-          }),
-      ...(booleanOption(parsed.values, "allow-local-network")
-        ? { allowLocalNetwork: true }
-        : {}),
-    },
-  });
-  emitSuccess(
-    commandOutput(dependencies, booleanOption(parsed.values, "json")),
-    { command: "serve", address: running.address },
-    [`Reference server listening at ${running.address}`],
-  );
-  await waitForShutdown(running);
   return CLI_EXIT_CODES.success;
 }
 
