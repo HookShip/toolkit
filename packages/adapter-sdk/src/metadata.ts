@@ -3,8 +3,11 @@
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 
 import {
+  canonicalJson,
+  type CanonicalJsonInput,
+} from "@webhook-portal/canonical-model";
+import {
   assertWellFormedUnicode,
-  compareUtf16CodeUnits,
   isWellFormedUnicode,
 } from "./canonical.js";
 import { checkCredentialScope, type ScopedCredential } from "./context.js";
@@ -459,22 +462,9 @@ function validateIdentity(
 }
 
 function stableJson(value: AdapterJsonValue): string {
-  if (Array.isArray(value)) {
-    return `[${value.map((item) => stableJson(item)).join(",")}]`;
-  }
-  if (value !== null && typeof value === "object") {
-    return `{${Object.entries(value)
-      .sort(([left], [right]) => compareUtf16CodeUnits(left, right))
-      .map(
-        ([key, item]) =>
-          `${JSON.stringify(key)}:${stableJson(item as AdapterJsonValue)}`,
-      )
-      .join(",")}}`;
-  }
-  if (typeof value === "string") {
-    assertWellFormedUnicode(value);
-  }
-  return JSON.stringify(value);
+  return canonicalJson(value as CanonicalJsonInput, {
+    onError: (_kind, _path, message) => new TypeError(message),
+  });
 }
 
 function jsonValue(value: unknown): AdapterJsonValue {

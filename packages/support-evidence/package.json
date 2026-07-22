@@ -65,6 +65,9 @@
       "import": "./dist/types.js"
     }
   },
+  "dependencies": {
+    "@webhook-portal/canonical-model": "workspace:*"
+  },
   "engines": {
     "node": ">=22"
   },

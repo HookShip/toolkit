@@ -6,6 +6,8 @@ import {
   UNSAFE_OBJECT_KEYS,
   compareCodeUnits,
   isJsonObject,
+  orderJsonKeys,
+  stableJson,
   type JsonObject,
   type JsonValue,
   type Sha256Checksum,
@@ -484,26 +486,11 @@ export function inspectJsonValue(
 }
 
 export function sortJsonValue(value: JsonValue): JsonValue {
-  if (Array.isArray(value)) {
-    return value.map((item) => sortJsonValue(item));
-  }
-
-  if (isJsonObject(value)) {
-    const sorted: Record<string, JsonValue> = {};
-    for (const key of Object.keys(value).sort(compareCodeUnits)) {
-      const item = value[key];
-      if (item !== undefined) {
-        sorted[key] = sortJsonValue(item);
-      }
-    }
-    return sorted;
-  }
-
-  return value;
+  return orderJsonKeys(value);
 }
 
 export function stableStringify(value: JsonValue): string {
-  return JSON.stringify(sortJsonValue(value));
+  return stableJson(value);
 }
 
 export function sha256(value: string): Sha256Checksum {

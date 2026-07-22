@@ -1,6 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
-import { createHash, timingSafeEqual } from "node:crypto";
+import { timingSafeEqual } from "node:crypto";
+
+import {
+  canonicalJson as coreCanonicalJson,
+  isWellFormedUnicode,
+  sha256Digest as coreSha256Digest,
+  type CanonicalJsonErrorKind,
+  type CanonicalJsonInput,
+} from "@webhook-portal/canonical-model";
 
 import { ExtensionValidationError } from "./errors.js";
 import { inspectArray, inspectRecord } from "./validation.js";
@@ -21,6 +29,32 @@ const DEFAULT_CANONICAL_LIMITS = Object.freeze({
   maximumOutputBytes: 8 * 1024 * 1024,
 });
 
+/**
+ * Maps shared canonical failure kinds onto this package's stable error codes so
+ * the public {@link ExtensionValidationError} contract is preserved while the
+ * serialization itself lives in `@webhook-portal/canonical-model`.
+ */
+const EXTENSION_CANONICAL_CODE: Readonly<
+  Record<CanonicalJsonErrorKind, string>
+> = {
+  "accessor-property": "NON_JSON_VALUE",
+  cyclic: "CYCLIC_JSON",
+  "custom-prototype": "NON_JSON_VALUE",
+  "depth-limit": "CANONICAL_DEPTH_LIMIT",
+  "malformed-unicode": "MALFORMED_UNICODE",
+  "node-limit": "CANONICAL_NODE_LIMIT",
+  "non-finite-number": "NON_FINITE_NUMBER",
+  "non-json-value": "NON_JSON_VALUE",
+  "output-limit": "CANONICAL_OUTPUT_LIMIT",
+  "prototype-key": "NON_JSON_VALUE",
+  "sparse-array": "NON_JSON_VALUE",
+  "symbol-key": "NON_JSON_VALUE",
+  "unsafe-array": "NON_JSON_VALUE",
+  "unsupported-object": "NON_JSON_VALUE",
+};
+
+export { isWellFormedUnicode };
+
 export function compareUtf16CodeUnits(left: string, right: string): number {
   assertWellFormedUnicode(left);
   assertWellFormedUnicode(right);
@@ -28,22 +62,6 @@ export function compareUtf16CodeUnits(left: string, right: string): number {
     return 0;
   }
   return left < right ? -1 : 1;
-}
-
-export function isWellFormedUnicode(value: string): boolean {
-  for (let index = 0; index < value.length; index += 1) {
-    const codeUnit = value.charCodeAt(index);
-    if (codeUnit >= 0xd800 && codeUnit <= 0xdbff) {
-      const next = value.charCodeAt(index + 1);
-      if (index + 1 >= value.length || next < 0xdc00 || next > 0xdfff) {
-        return false;
-      }
-      index += 1;
-    } else if (codeUnit >= 0xdc00 && codeUnit <= 0xdfff) {
-      return false;
-    }
-  }
-  return true;
 }
 
 export function assertWellFormedUnicode(
@@ -59,110 +77,24 @@ export function assertWellFormedUnicode(
   }
 }
 
-function normalizedLimits(limits: CanonicalJsonLimits) {
-  return {
-    maximumDepth: limits.maximumDepth ?? DEFAULT_CANONICAL_LIMITS.maximumDepth,
-    maximumNodes: limits.maximumNodes ?? DEFAULT_CANONICAL_LIMITS.maximumNodes,
-    maximumOutputBytes:
-      limits.maximumOutputBytes ?? DEFAULT_CANONICAL_LIMITS.maximumOutputBytes,
-  };
-}
-
 export function canonicalJson(
   value: JsonValue,
   limits: CanonicalJsonLimits = {},
 ): string {
-  const bounded = normalizedLimits(limits);
-  const active = new Set<object>();
-  let nodes = 0;
-
-  const encode = (candidate: unknown, path: string, depth: number): string => {
-    nodes += 1;
-    if (nodes > bounded.maximumNodes) {
-      throw new ExtensionValidationError(
-        "CANONICAL_NODE_LIMIT",
-        "Canonical JSON node limit exceeded.",
-        path,
-      );
-    }
-    if (depth > bounded.maximumDepth) {
-      throw new ExtensionValidationError(
-        "CANONICAL_DEPTH_LIMIT",
-        "Canonical JSON depth limit exceeded.",
-        path,
-      );
-    }
-    if (candidate === null || typeof candidate === "boolean") {
-      return String(candidate);
-    }
-    if (typeof candidate === "string") {
-      assertWellFormedUnicode(candidate, path);
-      return JSON.stringify(candidate);
-    }
-    if (typeof candidate === "number") {
-      if (!Number.isFinite(candidate)) {
-        throw new ExtensionValidationError(
-          "NON_FINITE_NUMBER",
-          `${path} contains a non-finite number.`,
-          path,
-        );
-      }
-      if (Object.is(candidate, -0)) {
-        return "0";
-      }
-      return JSON.stringify(candidate);
-    }
-    if (typeof candidate !== "object" || candidate === undefined) {
-      throw new ExtensionValidationError(
-        "NON_JSON_VALUE",
-        `${path} is not a JSON value.`,
-        path,
-      );
-    }
-    if (active.has(candidate)) {
-      throw new ExtensionValidationError(
-        "CYCLIC_JSON",
-        `${path} contains a cycle.`,
-        path,
-      );
-    }
-    active.add(candidate);
-    try {
-      if (Array.isArray(candidate)) {
-        const values = inspectArray(candidate, path, bounded.maximumNodes);
-        return `[${values
-          .map((item, index) => encode(item, `${path}[${index}]`, depth + 1))
-          .join(",")}]`;
-      }
-      const record = inspectRecord(candidate, path, {
-        maximumEntries: bounded.maximumNodes,
-        rejectDangerousKeys: false,
-      });
-      const keys = Object.keys(record).sort(compareUtf16CodeUnits);
-      return `{${keys
-        .map((key) => {
-          assertWellFormedUnicode(key, `${path} key`);
-          return `${JSON.stringify(key)}:${encode(
-            record[key],
-            `${path}.${key}`,
-            depth + 1,
-          )}`;
-        })
-        .join(",")}}`;
-    } finally {
-      active.delete(candidate);
-    }
-  };
-
-  const output = encode(value, "$", 0);
-  if (Buffer.byteLength(output, "utf8") > bounded.maximumOutputBytes) {
-    throw new ExtensionValidationError(
-      "CANONICAL_OUTPUT_LIMIT",
-      "Canonical JSON output limit exceeded.",
-      "$",
-    );
-  }
-  return output;
+  return coreCanonicalJson(value as CanonicalJsonInput, {
+    limits: {
+      maximumDepth: limits.maximumDepth ?? DEFAULT_CANONICAL_LIMITS.maximumDepth,
+      maximumNodes: limits.maximumNodes ?? DEFAULT_CANONICAL_LIMITS.maximumNodes,
+      maximumOutputBytes:
+        limits.maximumOutputBytes ??
+        DEFAULT_CANONICAL_LIMITS.maximumOutputBytes,
+    },
+    // Canonicalization treats prototype-polluting names as inert string keys;
+    // object construction elsewhere is what must reject them.
+    allowUnsafeKeys: true,
+    onError: (kind, path, message) =>
+      new ExtensionValidationError(EXTENSION_CANONICAL_CODE[kind], message, path),
+  });
 }
 
 export function canonicalJsonBytes(
@@ -177,8 +109,9 @@ export function parseCanonicalJson(
   limits: CanonicalJsonLimits = {},
 ): JsonValue {
   assertWellFormedUnicode(text, "Canonical JSON");
-  const bounded = normalizedLimits(limits);
-  if (Buffer.byteLength(text, "utf8") > bounded.maximumOutputBytes) {
+  const maximumOutputBytes =
+    limits.maximumOutputBytes ?? DEFAULT_CANONICAL_LIMITS.maximumOutputBytes;
+  if (Buffer.byteLength(text, "utf8") > maximumOutputBytes) {
     throw new ExtensionValidationError(
       "CANONICAL_INPUT_LIMIT",
       "Canonical JSON input limit exceeded.",
@@ -195,7 +128,7 @@ export function parseCanonicalJson(
       "$",
     );
   }
-  const canonical = canonicalJson(parsed as JsonValue, bounded);
+  const canonical = canonicalJson(parsed as JsonValue, limits);
   if (canonical !== text) {
     throw new ExtensionValidationError(
       "NON_CANONICAL_JSON",
@@ -207,7 +140,7 @@ export function parseCanonicalJson(
 }
 
 export function sha256Digest(value: string | Uint8Array): string {
-  return `sha256:${createHash("sha256").update(value).digest("hex")}`;
+  return coreSha256Digest(value);
 }
 
 export function canonicalJsonDigest(

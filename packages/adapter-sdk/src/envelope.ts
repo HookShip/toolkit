@@ -8,6 +8,10 @@ import {
 } from "node:crypto";
 
 import {
+  canonicalJson,
+  type CanonicalJsonInput,
+} from "@webhook-portal/canonical-model";
+import {
   ADAPTER_OPERATIONS,
   isSideEffectingOperation,
   type AdapterOperation,
@@ -259,19 +263,9 @@ function canonicalize(
 }
 
 function canonicalStringify(value: AdapterJsonValue): string {
-  if (Array.isArray(value)) {
-    return `[${value.map((item) => canonicalStringify(item)).join(",")}]`;
-  }
-  if (value !== null && typeof value === "object") {
-    return `{${Object.entries(value)
-      .sort(([left], [right]) => compareUtf16CodeUnits(left, right))
-      .map(
-        ([key, item]) =>
-          `${JSON.stringify(key)}:${canonicalStringify(item as AdapterJsonValue)}`,
-      )
-      .join(",")}}`;
-  }
-  return JSON.stringify(value);
+  return canonicalJson(value as CanonicalJsonInput, {
+    onError: (_kind, _path, message) => new TypeError(message),
+  });
 }
 
 function envelopeFingerprintMaterial(

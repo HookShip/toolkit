@@ -2,29 +2,11 @@
 
 import { createHash, timingSafeEqual } from "node:crypto";
 
+import { stableJson } from "@webhook-portal/canonical-model";
+
 import type { CompatibilityReport } from "./report.js";
 
-function compareCodeUnits(left: string, right: string): number {
-  return left < right ? -1 : left > right ? 1 : 0;
-}
-
-function ordered(value: unknown): unknown {
-  if (Array.isArray(value)) {
-    return value.map((item) => ordered(item));
-  }
-  if (value !== null && typeof value === "object") {
-    const result: Record<string, unknown> = {};
-    for (const key of Object.keys(value).sort(compareCodeUnits)) {
-      result[key] = ordered((value as Record<string, unknown>)[key]);
-    }
-    return result;
-  }
-  return value;
-}
-
-export function stableJson(value: unknown, indentation?: number): string {
-  return JSON.stringify(ordered(value), null, indentation);
-}
+export { stableJson } from "@webhook-portal/canonical-model";
 
 export function computeReportChecksum(
   report: Omit<CompatibilityReport, "integrity">,

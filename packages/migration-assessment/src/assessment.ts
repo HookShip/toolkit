@@ -7,7 +7,7 @@ import {
   type AdapterCapability,
   type AdapterOperation,
 } from "@webhook-portal/adapter-sdk";
-import { isCanonicalContract } from "@webhook-portal/canonical-model";
+import { isCanonicalContract, stableJson } from "@webhook-portal/canonical-model";
 
 import type {
   AssessmentDiagnostic,
@@ -109,23 +109,8 @@ function compareText(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
 }
 
-function stableValue(value: unknown): unknown {
-  if (Array.isArray(value)) {
-    return value.map(stableValue);
-  }
-  if (typeof value !== "object" || value === null) {
-    return value;
-  }
-  return Object.fromEntries(
-    Object.entries(value as Record<string, unknown>)
-      .filter(([, item]) => item !== undefined)
-      .sort(([left], [right]) => compareText(left, right))
-      .map(([key, item]) => [key, stableValue(item)]),
-  );
-}
-
 export function canonicalJson(value: unknown): string {
-  return JSON.stringify(stableValue(value));
+  return stableJson(value);
 }
 
 export function checksumInventory(

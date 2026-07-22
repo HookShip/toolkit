@@ -172,7 +172,11 @@ importers:
         specifier: workspace:*
         version: link:../extension-sdk
 
-  packages/extension-sdk: {}
+  packages/extension-sdk:
+    dependencies:
+      '@webhook-portal/canonical-model':
+        specifier: workspace:*
+        version: link:../canonical-model
 
   packages/migration-assessment:
     dependencies:
@@ -209,7 +213,11 @@ importers:
 
   packages/signing: {}
 
-  packages/support-evidence: {}
+  packages/support-evidence:
+    dependencies:
+      '@webhook-portal/canonical-model':
+        specifier: workspace:*
+        version: link:../canonical-model
 
 packages:
 
