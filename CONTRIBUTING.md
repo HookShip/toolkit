@@ -28,6 +28,7 @@ Run the narrowest relevant command while developing, then the broader gate:
 | In-memory workflow                   | `pnpm smoke`                                  |
 | Package tarballs                     | `pnpm pack:smoke`                             |
 | Reference infrastructure             | `pnpm check:compose`                          |
+| Source-size ratchet                  | `pnpm check:sizes`                            |
 | Release metadata                     | `pnpm check:release`                          |
 | Release artifacts without publishing | `pnpm release:dry-run`                        |
 | Coordinated version bump (preview)   | `pnpm release:prepare -- <version> --dry-run` |
@@ -37,8 +38,8 @@ Run the narrowest relevant command while developing, then the broader gate:
 | Local registry publish + install     | `pnpm test:verdaccio`                         |
 
 `pnpm check` covers formatting, linting, type checking, all deterministic
-workspace tests, extension-pack tests, package boundaries, secret hygiene,
-release consistency, and builds.
+workspace tests, extension-pack tests, package boundaries, the source-size
+ratchet, secret hygiene, release consistency, and builds.
 
 Docker is needed only for running the reference stack or live integration
 profile. `pnpm check:compose` renders Compose configuration and validates the
