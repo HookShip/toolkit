@@ -83,8 +83,10 @@ export function canonicalJson(
 ): string {
   return coreCanonicalJson(value as CanonicalJsonInput, {
     limits: {
-      maximumDepth: limits.maximumDepth ?? DEFAULT_CANONICAL_LIMITS.maximumDepth,
-      maximumNodes: limits.maximumNodes ?? DEFAULT_CANONICAL_LIMITS.maximumNodes,
+      maximumDepth:
+        limits.maximumDepth ?? DEFAULT_CANONICAL_LIMITS.maximumDepth,
+      maximumNodes:
+        limits.maximumNodes ?? DEFAULT_CANONICAL_LIMITS.maximumNodes,
       maximumOutputBytes:
         limits.maximumOutputBytes ??
         DEFAULT_CANONICAL_LIMITS.maximumOutputBytes,
@@ -93,7 +95,11 @@ export function canonicalJson(
     // object construction elsewhere is what must reject them.
     allowUnsafeKeys: true,
     onError: (kind, path, message) =>
-      new ExtensionValidationError(EXTENSION_CANONICAL_CODE[kind], message, path),
+      new ExtensionValidationError(
+        EXTENSION_CANONICAL_CODE[kind],
+        message,
+        path,
+      ),
   });
 }
 

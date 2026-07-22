@@ -67,8 +67,7 @@ const DEFAULT_MESSAGES: Readonly<Record<CanonicalJsonErrorKind, string>> = {
   cyclic: "Canonical JSON cannot contain cycles.",
   "custom-prototype": "Canonical JSON values must use a plain prototype.",
   "depth-limit": "Canonical JSON depth limit exceeded.",
-  "malformed-unicode":
-    "Canonical JSON contains an unpaired UTF-16 surrogate.",
+  "malformed-unicode": "Canonical JSON contains an unpaired UTF-16 surrogate.",
   "node-limit": "Canonical JSON node limit exceeded.",
   "non-finite-number": "Canonical JSON cannot contain non-finite numbers.",
   "non-json-value": "Canonical JSON contains a non-JSON value.",

@@ -7,7 +7,10 @@ import {
   type AdapterCapability,
   type AdapterOperation,
 } from "@webhook-portal/adapter-sdk";
-import { isCanonicalContract, stableJson } from "@webhook-portal/canonical-model";
+import {
+  isCanonicalContract,
+  stableJson,
+} from "@webhook-portal/canonical-model";
 
 import type {
   AssessmentDiagnostic,

@@ -6,10 +6,7 @@ import {
   canonicalJson,
   type CanonicalJsonInput,
 } from "@webhook-portal/canonical-model";
-import {
-  assertWellFormedUnicode,
-  isWellFormedUnicode,
-} from "./canonical.js";
+import { assertWellFormedUnicode, isWellFormedUnicode } from "./canonical.js";
 import { checkCredentialScope, type ScopedCredential } from "./context.js";
 import {
   isMappingVersion,

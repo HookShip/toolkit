@@ -44,13 +44,13 @@ canonicalJsonDigest({ b: 1, a: 2 }); // 'sha256:<hex>'
 Exact edge semantics:
 
 | Concern            | Behavior                                                             |
-| ------------------ | ------------------------------------------------------------------- |
-| Key ordering       | Ascending by UTF-16 code unit (locale-independent).                 |
-| Unicode            | Unpaired surrogates in strings **or keys** are rejected.            |
-| Negative zero      | `-0` serializes to `0`.                                             |
-| Non-finite numbers | `NaN`/`±Infinity` are rejected.                                     |
+| ------------------ | -------------------------------------------------------------------- |
+| Key ordering       | Ascending by UTF-16 code unit (locale-independent).                  |
+| Unicode            | Unpaired surrogates in strings **or keys** are rejected.             |
+| Negative zero      | `-0` serializes to `0`.                                              |
+| Non-finite numbers | `NaN`/`±Infinity` are rejected.                                      |
 | `undefined`        | Rejected wherever it appears (array element or object property).     |
-| Arrays             | Must be dense, standard-prototype arrays of index data properties.  |
+| Arrays             | Must be dense, standard-prototype arrays of index data properties.   |
 | Objects            | Enumerable data properties only; accessors/symbols/proxies rejected. |
 | Prototype keys     | `__proto__`/`constructor`/`prototype` rejected unless opted in.      |
 

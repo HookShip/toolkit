@@ -49,7 +49,7 @@ export const CANONICAL_GOLDEN_VECTORS: readonly CanonicalGoldenVector[] =
     },
     {
       description: "unicode keys sorted by UTF-16 code unit",
-      input: { z: 1, "ä": 2, "İ": 3, i: 4, "😀": 5 },
+      input: { z: 1, ä: 2, İ: 3, i: 4, "😀": 5 },
       canonical: '{"i":4,"z":1,"ä":2,"İ":3,"😀":5}',
       sha256:
         "sha256:d3472266da9d454a9772290ea49da8f9967a6eb1e78420e2288dcd38ce18f5c4",
