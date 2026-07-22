@@ -40,7 +40,7 @@ export const allowlist = new Map([
   ["packages/extension-sdk/src/manifest.ts", 1017],
   ["packages/migration-assessment/src/assessment.ts", 857],
   ["packages/migration-assessment/src/import.ts", 1085],
-  ["packages/support-evidence/src/sanitizer.ts", 840],
+  ["packages/support-evidence/src/fail-closed-validation.ts", 840],
 ]);
 
 const sourceExtensions = new Set([

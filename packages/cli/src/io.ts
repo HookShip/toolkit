@@ -15,7 +15,10 @@ import { randomUUID } from "node:crypto";
 import type { Readable, Writable } from "node:stream";
 
 import { redactSecrets } from "@webhook-portal/adapter-sdk";
+import { redactText } from "@webhook-portal/canonical-model/redaction";
 import { parse as parseYaml } from "yaml";
+
+export { redactText };
 
 export interface CliStreams {
   readonly stdin: Readable;
@@ -238,18 +241,6 @@ async function syncDirectoryAfterRename(
   } finally {
     await handle?.close();
   }
-}
-
-const SECRET_PATTERNS = [
-  /whsec_[A-Za-z0-9+/=]{16,}/gu,
-  /\b(?:authorization|api[-_]?key|secret|token|password)\s*[:=]\s*["']?[^,\s"']+/giu,
-] as const;
-
-export function redactText(value: string): string {
-  return SECRET_PATTERNS.reduce(
-    (current, pattern) => current.replace(pattern, "[REDACTED]"),
-    value,
-  );
 }
 
 const SAFE_DIAGNOSTIC_KEYS = new Set([

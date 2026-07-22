@@ -6,7 +6,7 @@ signatures, and neutral JSON or Markdown summaries.
 
 ## Security model
 
-The sanitizer is a closed allowlist. It accepts only:
+The fail-closed validator is a closed allowlist. It accepts only:
 
 - an opaque support case ID;
 - explicit opaque or SHA-256 tenant, environment, and project identifiers;
@@ -181,8 +181,10 @@ claim.
 `@webhook-portal/support-evidence/examples` exports a deterministic,
 non-sensitive example input and `createExampleEvidenceBundle()`.
 
-The package also exposes `./bundle`, `./canonical`, `./errors`, `./metrics`,
-`./renderers`, `./sanitizer`, `./signatures`, and `./types`.
+The package also exposes `./bundle`, `./canonical`, `./errors`,
+`./fail-closed-validation`, `./metrics`, `./renderers`, `./signatures`, and
+`./types`. The former `./sanitizer` subpath remains as a deprecated alias of
+`./fail-closed-validation`.
 
 ## License
 

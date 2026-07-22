@@ -44,6 +44,10 @@
       "types": "./dist/examples.d.ts",
       "import": "./dist/examples.js"
     },
+    "./fail-closed-validation": {
+      "types": "./dist/fail-closed-validation.d.ts",
+      "import": "./dist/fail-closed-validation.js"
+    },
     "./metrics": {
       "types": "./dist/metrics.d.ts",
       "import": "./dist/metrics.js"

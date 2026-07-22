@@ -1,6 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
+  isCredentialFieldName,
+  looksLikeCredentialValue,
+} from "@webhook-portal/canonical-model/redaction";
+
+import {
   MIGRATION_INVENTORY_FORMAT,
   MIGRATION_INVENTORY_FORMAT_VERSION,
   MIGRATION_INVENTORY_SCHEMA_ID,
@@ -104,21 +109,8 @@ function normalizedKey(value: string): string {
 }
 
 function isCredentialKey(value: string): boolean {
-  const normalized = normalizedKey(value);
   return (
-    credentialKeys.has(normalized) ||
-    /(apikey|authorization|credential|password|privatekey|secret|token)/u.test(
-      normalized,
-    )
-  );
-}
-
-function looksLikeCredentialValue(value: string): boolean {
-  return (
-    /^(?:basic|bearer)\s+\S+/iu.test(value) ||
-    /^-----BEGIN [A-Z ]*PRIVATE KEY-----/u.test(value) ||
-    /^(?:ghp_|sk_live_|sk_test_|whsec_|xox[baprs]-)/u.test(value) ||
-    /^[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}$/u.test(value)
+    credentialKeys.has(normalizedKey(value)) || isCredentialFieldName(value)
   );
 }
 

@@ -25,6 +25,10 @@ import {
   type MetadataDeliveryAttemptInput,
 } from "@webhook-portal/adapter-sdk";
 import {
+  isCredentialFieldName,
+  looksLikeCredentialValue,
+} from "@webhook-portal/canonical-model/redaction";
+import {
   createCompatibilityReport,
   renderCompatibilityReportJson,
   renderCompatibilityReportMarkdown,
@@ -331,14 +335,7 @@ function safeString(value: unknown, label: string, maximum = 1024): string {
 }
 
 function looksLikeCredential(value: string): boolean {
-  return (
-    /^(?:basic|bearer)\s+\S+/iu.test(value) ||
-    /^-----BEGIN [A-Z ]*PRIVATE KEY-----/u.test(value) ||
-    /^(?:AKIA[0-9A-Z]{12,}|gh[pousr]_|sk_(?:live|test)_|whsec_|xox[baprs]-)/u.test(
-      value,
-    ) ||
-    /^[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}$/u.test(value)
-  );
+  return looksLikeCredentialValue(value);
 }
 
 function assertNoCredentialValues(
@@ -458,8 +455,6 @@ const CAPABILITY_KEYS = new Set([
   "sideEffecting",
   "status",
 ]);
-const CREDENTIAL_FIELD_PATTERN =
-  /(?:api[-_]?key|authorization|credential|password|private[-_]?key|secret|token)/iu;
 
 function capabilityConstraint(
   value: unknown,
@@ -548,7 +543,7 @@ function capabilityDeclaration(
     );
     constraints = {};
     for (const [name, constraint] of Object.entries(rawConstraints)) {
-      if (CREDENTIAL_FIELD_PATTERN.test(name)) {
+      if (isCredentialFieldName(name)) {
         throw new CliCommandError(
           CLI_EXIT_CODES.invalid,
           "CREDENTIAL_FIELD_REJECTED",

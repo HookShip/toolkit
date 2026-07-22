@@ -16,7 +16,7 @@ import {
   createEvidenceSnapshot,
   sanitizeEvidenceInput,
   validateEvidenceSnapshot,
-} from "./sanitizer.js";
+} from "./fail-closed-validation.js";
 import type {
   EvidenceBundle,
   EvidenceLimitOverrides,
