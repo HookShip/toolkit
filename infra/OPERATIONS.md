@@ -35,6 +35,16 @@ refuses to start until the migration container exits successfully, and
 unexpected, ahead of the binary, or checksum-mismatched. There is no down
 migration; a schema rollback is a restore (see below).
 
+The canonical source for the schema is the CLI/Postgres migrator manifest
+`REFERENCE_SERVER_MIGRATIONS` in
+[`packages/cli/src/reference-server/migrations.ts`](../packages/cli/src/reference-server/migrations.ts).
+The standalone `infra/migrations/*.sql` files are the deployment mirror for the
+Compose/psql path: the advisory-lock, migration-state guard, and checksum
+bookkeeping are hand-maintained boilerplate, while the DDL body, version, and
+recorded checksum are copied verbatim from the manifest. A change to the schema
+starts in the manifest and is mirrored into the matching `.sql` file;
+`packages/cli/test/reference-migration-parity.test.ts` fails if the two drift.
+
 Some pre-release changes are intentionally breaking — for example the payload
 storage-identity change enforced by migration `011`, which rejects legacy bucket
 bindings and does not adopt a legacy bucket automatically. The supported local
