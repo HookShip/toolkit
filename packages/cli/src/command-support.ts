@@ -108,7 +108,11 @@ export function optionSpec(
 export function commandOutput(
   source: Pick<CommandStreamsSource, "stdout" | "stderr">,
   json: boolean,
-): { readonly json: boolean; readonly stdout: Writable; readonly stderr: Writable } {
+): {
+  readonly json: boolean;
+  readonly stdout: Writable;
+  readonly stderr: Writable;
+} {
   return {
     json,
     stdout: source.stdout,

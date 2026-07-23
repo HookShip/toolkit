@@ -37,7 +37,8 @@ package already sits above — owns the single canonical serialization
 implementation:
 
 - `canonicalJson` is the strict serializer with fully documented edge semantics
-  (see [`packages/canonical-model/README.md`](../../packages/canonical-model/README.md)).
+  (see
+  [`packages/canonical-model/README.md`](../../packages/canonical-model/README.md)).
   Failures throw `CanonicalJsonError` carrying a stable `kind`; packages that
   expose their own error taxonomy pass an `onError` factory that translates the
   `kind` into their domain error while preserving byte output.
@@ -52,15 +53,15 @@ implementation:
 The strict family delegates its serializer to `canonicalJson`; the lenient
 family delegates to `stableJson`. `@webhook-portal/adapter-sdk` keeps its
 secret-resolving, `undefined`-dropping canonicalization pre-pass but delegates
-the final byte production to `canonicalJson`. No package retains a second
-copy of the traversal.
+the final byte production to `canonicalJson`. No package retains a second copy
+of the traversal.
 
 ## Consequences
 
 - Signatures and checksums are guaranteed byte-identical across the cohort by
-  construction and proven by shared golden vectors; existing committed
-  seed-pack signatures and every package's reproducibility suite continue to
-  pass unchanged.
+  construction and proven by shared golden vectors; existing committed seed-pack
+  signatures and every package's reproducibility suite continue to pass
+  unchanged.
 - `@webhook-portal/extension-sdk` and `@webhook-portal/support-evidence` gained
   a dependency on `@webhook-portal/canonical-model`. The dependency direction
   remains acyclic (canonical-model is a leaf) and is enforced by
