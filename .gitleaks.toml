@@ -58,3 +58,7 @@ condition = "AND"
 regexTarget = "match"
 paths = ['''^packages/signing/src/test-helpers\.ts$''']
 regexes = ['''whsec_[M]fKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw''']
+
+[[allowlists]]
+description = "Deliberately fake secret-shaped strings forming the credential-detection/redaction corpus; asserted to be detected and redacted, never real credentials."
+paths = ['''^packages/canonical-model/test/redaction\.test\.ts$''']

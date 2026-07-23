@@ -9,6 +9,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const forbiddenBasenames = new Set([".env", ".npmrc"]);
 const reviewedFixturesAndDetectors = new Set([
   "extensions/test/seed-packs.test.mjs",
+  "packages/canonical-model/test/redaction.test.ts",
   "packages/extension-sdk/src/bundle.ts",
   "scripts/check-secret-hygiene.mjs",
 ]);
