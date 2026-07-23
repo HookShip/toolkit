@@ -71,3 +71,24 @@ of the traversal.
 - The lenient and strict variants are intentionally distinct because they must
   reproduce different historical bytes; both live in one module so the
   distinction is explicit rather than accidental.
+
+## Signature scheme divergence (intentional)
+
+The canonical-JSON foundation is shared, but the higher-level **bundle/signature
+schemes** in `@webhook-portal/extension-sdk` and
+`@webhook-portal/support-evidence` are deliberately **not** consolidated:
+
+- They apply different domain separators — extension bundles sign
+  `webhook-portal-extension-bundle-v1\n<digest>`, while evidence bundles sign a
+  canonical JSON payload binding algorithm, digest, format, key id, and
+  timestamp. Distinct separators make a signature over one scheme
+  non-transferable to the other, which is a security property, not duplication.
+- They use different trust models (extension keys carry active/retired/revoked
+  statuses with rotation and thresholds; evidence keys are a simpler trusted
+  set) and different key-input acceptance and error taxonomies.
+
+Consolidating them would either change signature bytes or require enough
+configuration to reproduce both, defeating the purpose. What is genuinely shared
+— the canonical serialization the signing payloads are built from — is
+consolidated in `@webhook-portal/canonical-model` and anchored by
+`CANONICAL_GOLDEN_VECTORS`, which both packages assert.
