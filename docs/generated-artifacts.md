@@ -19,7 +19,7 @@ output, and never hand-edit a generated artifact — regenerate it.
 - Forward-only migration SQL under [`infra/migrations`](../infra/migrations).
   The DDL body, version, and checksum in each `.sql` file mirror the canonical
   `REFERENCE_SERVER_MIGRATIONS` manifest in
-  [`packages/cli/src/reference-server/migrations.ts`](../packages/cli/src/reference-server/migrations.ts);
+  [`packages/reference-server-core/src/migrations.ts`](../packages/reference-server-core/src/migrations.ts);
   `reference-migration-parity.test.ts` fails on drift.
 
 ## Generated (reproducible, derived)

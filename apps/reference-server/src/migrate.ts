@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // SPDX-License-Identifier: Apache-2.0
 
-import { migrateReferenceServerFromEnv } from "@webhook-portal/cli/reference-server";
+import { migrateReferenceServerFromEnv } from "@webhook-portal/reference-server-core";
 
 try {
   const applied = await migrateReferenceServerFromEnv();

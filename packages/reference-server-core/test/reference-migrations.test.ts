@@ -21,7 +21,7 @@ import {
   metadataTimelineIdentityKey,
   migratePostgres,
   sweepExpiredPayloads,
-} from "../src/reference-server/index.js";
+} from "../src/index.js";
 
 const migrationTimestamp = "2026-07-16T08:00:00.000Z";
 

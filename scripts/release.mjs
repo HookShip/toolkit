@@ -17,7 +17,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const manifestPath = path.join(root, "release", "manifest.json");
 const workRoot = path.join(root, ".release-work");
 const referenceAppPath = "apps/reference-server";
-const publicPackageCount = 13;
+const publicPackageCount = 14;
 const supportedSchemaVersion = 2;
 const semverPattern =
   /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?$/;
@@ -174,14 +174,17 @@ async function checkReferenceApp(failures) {
     if (pkg.publishConfig !== undefined) {
       failures.push(`${pkg.name}: private wrapper must not be publishable`);
     }
-    if (pkg.dependencies?.["@webhook-portal/cli"] !== "workspace:*") {
+    if (
+      pkg.dependencies?.["@webhook-portal/reference-server-core"] !==
+      "workspace:*"
+    ) {
       failures.push(
-        `${pkg.name}: wrapper must depend on @webhook-portal/cli via workspace:*`,
+        `${pkg.name}: wrapper must depend on @webhook-portal/reference-server-core via workspace:*`,
       );
     }
     if (Object.keys(pkg.dependencies ?? {}).length !== 1) {
       failures.push(
-        `${pkg.name}: wrapper runtime dependencies must contain only @webhook-portal/cli`,
+        `${pkg.name}: wrapper runtime dependencies must contain only @webhook-portal/reference-server-core`,
       );
     }
   } catch (error) {
@@ -389,7 +392,7 @@ async function check() {
     );
   }
   console.log(
-    "All 13 public packages and the private Apache-2.0 reference wrapper are release-consistent.",
+    `All ${publicPackageCount} public packages and the private Apache-2.0 reference wrapper are release-consistent.`,
   );
 }
 

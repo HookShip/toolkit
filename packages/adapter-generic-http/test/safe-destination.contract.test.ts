@@ -2,7 +2,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { resolveSafeDestination } from "../../cli/src/destination.js";
+import { resolveSafeDestination } from "../src/safe-destination.js";
 
 describe("CLI destination policy contract", () => {
   it("cannot opt into Azure WireServer", async () => {

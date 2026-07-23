@@ -13,7 +13,7 @@ import {
   type SecretRepository,
   type TestCommandRepository,
   type TimelineRepository,
-} from "../src/reference-server/index.js";
+} from "../src/index.js";
 
 // Compile-time proof that the composed repository still satisfies every
 // segregated role interface. Narrowing to a role must not require a cast.

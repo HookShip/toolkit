@@ -22,11 +22,11 @@
     "lint": "eslint src test",
     "test": "vitest run",
     "test:coverage": "node ../../scripts/test-coverage.mjs --project apps/reference-server",
-    "pretypecheck": "pnpm --filter @webhook-portal/cli build",
+    "pretypecheck": "pnpm --filter @webhook-portal/reference-server-core build",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test.json"
   },
   "dependencies": {
-    "@webhook-portal/cli": "workspace:*"
+    "@webhook-portal/reference-server-core": "workspace:*"
   },
   "devDependencies": {
     "@webhook-portal/adapter-sdk": "workspace:*",

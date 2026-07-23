@@ -19,7 +19,7 @@ import {
   type PayloadReconciliationCursor,
   type PutPayloadInput,
   type ReferenceServerConfig,
-} from "../src/reference-server/index.js";
+} from "../src/index.js";
 
 function openApi(eventTypes: readonly string[]): string {
   return JSON.stringify({

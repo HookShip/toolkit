@@ -11,11 +11,16 @@ import {
   type MetadataDeliveryAttemptInput,
   type ScopedCredential,
 } from "@webhook-portal/adapter-sdk";
-import { nodeHttpTransport } from "@webhook-portal/adapter-generic-http";
+import {
+  nodeHttpTransport,
+  resolveSafeDestination,
+} from "@webhook-portal/adapter-generic-http";
 import {
   canonicalize,
   diff,
   fixtures,
+  publishRequestFingerprint,
+  selectCanonicalEventVersion,
   types,
   type CanonicalContract,
   type CanonicalEventVersion,
@@ -47,8 +52,6 @@ import {
   streams,
   type CliDependencies,
 } from "./command-support.js";
-import { resolveSafeDestination } from "./destination.js";
-import { selectCanonicalEventVersion } from "./event-version.js";
 import { CLI_EXIT_CODES, type CliExitCode } from "./exit-codes.js";
 import {
   HttpRequestOutcomeUnknownError,
@@ -73,7 +76,6 @@ import {
   supportEvidenceVerifyCommand,
 } from "./learning-commands.js";
 import { emitFailure, emitSuccess } from "./output.js";
-import { publishRequestFingerprint } from "./reference-server/service.js";
 import { readSecret } from "./secrets.js";
 import type { SecretSourceOptions } from "./secrets.js";
 import { migrateCommand, serveCommand } from "./server-commands.js";

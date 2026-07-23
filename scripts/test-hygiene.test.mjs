@@ -19,6 +19,7 @@ const expectedTestWorkspaces = [
   "packages/extension-sdk",
   "packages/migration-assessment",
   "packages/portal-components",
+  "packages/reference-server-core",
   "packages/signing",
   "packages/support-evidence",
 ];

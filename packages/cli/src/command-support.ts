@@ -8,10 +8,12 @@ import type { HttpTransport } from "@webhook-portal/adapter-generic-http";
 
 import { CLI_EXIT_CODES, type CliExitCode } from "./exit-codes.js";
 import type { CliStreams } from "./io.js";
+// Type-only import: erased at runtime, so a CLI-only install never pulls the
+// reference-server runtime (Fastify/PG/MinIO). serve/migrate load it lazily.
 import type {
   migrateReferenceServerFromEnv,
   startReferenceServerFromEnv,
-} from "./reference-server/runtime.js";
+} from "@webhook-portal/reference-server-core";
 
 /** Shared byte/time budgets applied when a command reads a contract source. */
 export const CONTRACT_LIMIT_BYTES = 4 * 1024 * 1024;

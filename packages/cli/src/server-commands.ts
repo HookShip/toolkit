@@ -9,17 +9,34 @@ import {
   stringOption,
 } from "./arguments.js";
 import {
+  CliCommandError,
   commandOutput,
   ensurePositionals,
   type CliDependencies,
 } from "./command-support.js";
 import { CLI_EXIT_CODES, type CliExitCode } from "./exit-codes.js";
 import { emitSuccess } from "./output.js";
-import {
-  migrateReferenceServerFromEnv,
-  startReferenceServerFromEnv,
-  type RunningReferenceServer,
-} from "./reference-server/runtime.js";
+
+// `serve` and `migrate` are the only commands that need the reference-server
+// runtime (Fastify/PG/MinIO). It is loaded lazily from the optional peer
+// `@webhook-portal/reference-server-core` so a CLI-only install stays lean; the
+// static type reference elsewhere is erased.
+type ReferenceServerRuntime =
+  typeof import("@webhook-portal/reference-server-core");
+
+async function loadReferenceServerRuntime(): Promise<ReferenceServerRuntime> {
+  try {
+    return await import("@webhook-portal/reference-server-core");
+  } catch (error) {
+    throw new CliCommandError(
+      CLI_EXIT_CODES.runtime,
+      "REFERENCE_SERVER_RUNTIME_MISSING",
+      "The reference server runtime is not installed. Add the optional " +
+        "@webhook-portal/reference-server-core package to run serve/migrate.",
+      error instanceof Error ? { cause: error.message } : undefined,
+    );
+  }
+}
 
 export async function migrateCommand(
   args: readonly string[],
@@ -27,9 +44,10 @@ export async function migrateCommand(
 ): Promise<CliExitCode> {
   const parsed = parseCommandArguments(args);
   ensurePositionals(parsed.positionals, 0);
-  const applied = await (
-    dependencies.migrateServer ?? migrateReferenceServerFromEnv
-  )(dependencies.environment);
+  const migrate =
+    dependencies.migrateServer ??
+    (await loadReferenceServerRuntime()).migrateReferenceServerFromEnv;
+  const applied = await migrate(dependencies.environment);
   emitSuccess(
     commandOutput(dependencies, booleanOption(parsed.values, "json")),
     { command: "migrate", applied },
@@ -42,7 +60,12 @@ export async function migrateCommand(
   return CLI_EXIT_CODES.success;
 }
 
-async function waitForShutdown(running: RunningReferenceServer): Promise<void> {
+interface ReferenceServerHandle {
+  readonly address: string;
+  close(): Promise<void>;
+}
+
+async function waitForShutdown(running: ReferenceServerHandle): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     let closing = false;
     const shutdown = (): void => {
@@ -68,9 +91,10 @@ export async function serveCommand(
     migrate: { type: "boolean" },
   });
   ensurePositionals(parsed.positionals, 0);
-  const running = await (
-    dependencies.startServer ?? startReferenceServerFromEnv
-  )({
+  const start =
+    dependencies.startServer ??
+    (await loadReferenceServerRuntime()).startReferenceServerFromEnv;
+  const running = await start({
     environment: dependencies.environment,
     autoMigrate: booleanOption(parsed.values, "migrate"),
     configOverrides: {

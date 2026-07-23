@@ -27,7 +27,7 @@ import {
   type ContractImportRecord,
   type ReferenceRepository,
   type ReferenceServerConfig,
-} from "../src/reference-server/index.js";
+} from "../src/index.js";
 
 interface RepositoryHarness {
   readonly repository: ReferenceRepository;

@@ -14,6 +14,7 @@ import {
 import {
   createMetadataIngestVerifier,
   nodeHttpTransport,
+  resolveSafeDestination,
   type HttpTransport,
   type ValidatedDestination,
 } from "@webhook-portal/adapter-generic-http";
@@ -21,6 +22,8 @@ import {
   canonicalize,
   diff,
   fixtures,
+  publishRequestFingerprint,
+  selectCanonicalEventVersion,
   type CanonicalContract,
   type CanonicalEventVersion,
   type JsonValue,
@@ -37,8 +40,6 @@ import {
 
 import { referenceSha256, type SecretCipher } from "./crypto.js";
 import { InvalidTimelineCursorError } from "./cursor.js";
-import { resolveSafeDestination } from "../destination.js";
-import { selectCanonicalEventVersion } from "../event-version.js";
 import {
   processPayloadCleanupTasks,
   type PayloadStorage,
@@ -186,18 +187,6 @@ function publishServiceStatus(status: PublishStatus): PublishServiceStatus {
 
 function sha256(value: Uint8Array | string): string {
   return referenceSha256(value);
-}
-
-export function publishRequestFingerprint(
-  canonicalChecksum: string,
-  overrideReason?: string,
-): string {
-  return sha256(
-    JSON.stringify({
-      canonicalChecksum,
-      overrideReason: overrideReason ?? null,
-    }),
-  );
 }
 
 function payloadCleanupApiError(

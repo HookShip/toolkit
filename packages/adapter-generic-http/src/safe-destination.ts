@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
+import { BlockList, isIP } from "node:net";
+
 import {
   defaultHostResolver,
   isPublicIpAddress,
   validateHttpDestination,
   type ValidatedDestination,
-} from "@webhook-portal/adapter-generic-http";
-import { BlockList, isIP } from "node:net";
+} from "./destination.js";
 
 export interface ResolveDestinationOptions {
   readonly allowLocalNetwork: boolean;

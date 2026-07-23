@@ -70,6 +70,11 @@
       "version": "0.1.0"
     },
     {
+      "name": "@webhook-portal/reference-server-core",
+      "path": "packages/reference-server-core",
+      "version": "0.1.0"
+    },
+    {
       "name": "@webhook-portal/cli",
       "path": "packages/cli",
       "version": "0.1.0"

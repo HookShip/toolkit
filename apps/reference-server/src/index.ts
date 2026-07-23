@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // SPDX-License-Identifier: Apache-2.0
 
-import { runReferenceServerProcess } from "@webhook-portal/cli/reference-server";
+import { runReferenceServerProcess } from "@webhook-portal/reference-server-core";
 
 try {
   await runReferenceServerProcess({

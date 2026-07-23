@@ -24,6 +24,7 @@ export const publicPackageDirectories = new Set([
   "extension-sdk",
   "migration-assessment",
   "portal-components",
+  "reference-server-core",
   "signing",
   "support-evidence",
 ]);

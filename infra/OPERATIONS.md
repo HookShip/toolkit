@@ -37,7 +37,7 @@ migration; a schema rollback is a restore (see below).
 
 The canonical source for the schema is the CLI/Postgres migrator manifest
 `REFERENCE_SERVER_MIGRATIONS` in
-[`packages/cli/src/reference-server/migrations.ts`](../packages/cli/src/reference-server/migrations.ts).
+[`packages/reference-server-core/src/migrations.ts`](../packages/reference-server-core/src/migrations.ts).
 The standalone `infra/migrations/*.sql` files are the deployment mirror for the
 Compose/psql path: the advisory-lock, migration-state guard, and checksum
 bookkeeping are hand-maintained boilerplate, while the DDL body, version, and

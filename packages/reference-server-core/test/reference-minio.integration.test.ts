@@ -16,7 +16,7 @@ import {
   ensurePayloadStorageIdentity,
   migratePostgres,
   payloadBucketName,
-} from "../src/reference-server/index.js";
+} from "../src/index.js";
 
 function payloadId(...excluded: readonly string[]): string {
   let value: string;

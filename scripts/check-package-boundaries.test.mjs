@@ -30,11 +30,12 @@ const expectedPackages = [
   "extension-sdk",
   "migration-assessment",
   "portal-components",
+  "reference-server-core",
   "signing",
   "support-evidence",
 ];
 
-test("classifies exactly the 13 public packages and private app wrapper", async () => {
+test("classifies exactly the 14 public packages and private app wrapper", async () => {
   assert.deepEqual([...publicPackageDirectories].sort(), expectedPackages);
   assert.deepEqual([...privateAppDirectories], ["reference-server"]);
 

@@ -6,7 +6,7 @@ import type {
   CanonicalEventVersion,
   JsonObject,
   JsonValue,
-} from "@webhook-portal/contract-core";
+} from "@webhook-portal/canonical-model";
 
 export type EventVersionSelection =
   | {

@@ -44,9 +44,9 @@ importers:
 
   apps/reference-server:
     dependencies:
-      '@webhook-portal/cli':
+      '@webhook-portal/reference-server-core':
         specifier: workspace:*
-        version: link:../../packages/cli
+        version: link:../../packages/reference-server-core
     devDependencies:
       '@webhook-portal/adapter-sdk':
         specifier: workspace:*
@@ -93,12 +93,6 @@ importers:
 
   packages/cli:
     dependencies:
-      '@fastify/swagger':
-        specifier: ^9.8.1
-        version: 9.8.1
-      '@types/pg':
-        specifier: ^8.20.0
-        version: 8.20.0
       '@webhook-portal/adapter-generic-http':
         specifier: workspace:*
         version: link:../adapter-generic-http
@@ -123,18 +117,13 @@ importers:
       '@webhook-portal/support-evidence':
         specifier: workspace:*
         version: link:../support-evidence
-      fastify:
-        specifier: ^5.10.0
-        version: 5.10.0
-      minio:
-        specifier: ^8.0.7
-        version: 8.0.7
-      pg:
-        specifier: ^8.22.0
-        version: 8.22.0
       yaml:
         specifier: ^2.9.0
         version: 2.9.0
+    devDependencies:
+      '@webhook-portal/reference-server-core':
+        specifier: workspace:*
+        version: link:../reference-server-core
 
   packages/compatibility-report:
     dependencies:
@@ -210,6 +199,36 @@ importers:
       react-dom:
         specifier: ^19.2.7
         version: 19.2.7(react@19.2.7)
+
+  packages/reference-server-core:
+    dependencies:
+      '@fastify/swagger':
+        specifier: ^9.8.1
+        version: 9.8.1
+      '@types/pg':
+        specifier: ^8.20.0
+        version: 8.20.0
+      '@webhook-portal/adapter-generic-http':
+        specifier: workspace:*
+        version: link:../adapter-generic-http
+      '@webhook-portal/adapter-sdk':
+        specifier: workspace:*
+        version: link:../adapter-sdk
+      '@webhook-portal/contract-core':
+        specifier: workspace:*
+        version: link:../contract-core
+      '@webhook-portal/signing':
+        specifier: workspace:*
+        version: link:../signing
+      fastify:
+        specifier: ^5.10.0
+        version: 5.10.0
+      minio:
+        specifier: ^8.0.7
+        version: 8.0.7
+      pg:
+        specifier: ^8.22.0
+        version: 8.22.0
 
   packages/signing: {}
 

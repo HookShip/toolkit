@@ -5,11 +5,11 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-import { REFERENCE_SERVER_MIGRATIONS } from "../src/reference-server/index.js";
+import { REFERENCE_SERVER_MIGRATIONS } from "../src/index.js";
 
 /**
  * The reference schema is authored once in
- * `packages/cli/src/reference-server/migrations.ts` (the canonical source used
+ * `packages/reference-server-core/src/migrations.ts` (the canonical source used
  * by the CLI/Postgres migrator) and mirrored into `infra/migrations/*.sql` for
  * the Compose/psql deployment path. These parity tests are the guardrail that
  * keeps the two representations from drifting: the standalone `.sql` wrapper is

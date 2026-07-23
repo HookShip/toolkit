@@ -14,10 +14,12 @@ import { generateTypeScript } from "./typegen.js";
 export * from "@webhook-portal/canonical-model";
 export * from "./api-types.js";
 export * from "./diff.js";
+export * from "./event-version.js";
 export * from "./fixtures.js";
 export * from "./limits.js";
 export * from "./normalize.js";
 export * from "./parser.js";
+export { publishRequestFingerprint } from "./publish-fingerprint.js";
 export { resolveJsonPointer } from "./refs.js";
 export * from "./typegen.js";
 
