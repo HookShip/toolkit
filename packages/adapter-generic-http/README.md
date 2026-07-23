@@ -51,6 +51,42 @@ payloads or letting this product deliver normal events.
 This package is exercised by the shared
 [`@webhook-portal/adapter-conformance`](../adapter-conformance) harness.
 
+## Execution phases
+
+`GenericHttpAdapter.execute` runs a command through explicit phases so each is
+independently testable and its failure mode is unambiguous:
+
+1. **Preflight** (`#preflight`) — validates the operation, connection,
+   idempotency key, credential scope, provider references, capability, and
+   route, and performs the pre-dispatch idempotency lookup (replay/conflict/
+   in-progress). It returns either a terminal result or the validated context.
+2. **Idempotency reservation** — reserves the durable lease (`begin`) for
+   side-effecting commands, honoring deadline and store-availability races.
+3. **Dispatch** — prepares and sends the signed request through the transport.
+4. **Interpret** (`#interpretResponse`) — maps the response to a typed result.
+5. **Completion / error** — completes or releases the reservation
+   (`#completeIdempotency`/`#releaseIdempotency`) and maps thrown errors to
+   preflight vs. post-dispatch outcomes (`#preflightFailure`).
+
+## Retry and backoff (caller-owned)
+
+The adapter performs **no** internal retries or backoff. Every result is a
+single, deterministic classification of one attempt, and retry policy is the
+caller's responsibility:
+
+- `failureResult()` with `retryable: true` is safe to retry (no side effect
+  occurred). `retryable: false` is a permanent failure — retrying will not help.
+- `unknownResult()` (for example a timeout after dispatch, a transport error
+  after dispatch, or a malformed non-JSON `2xx` body) means the provider outcome
+  is **indeterminate**: a side effect may or may not have happened. Callers must
+  retry only under the **same idempotency key** so the durable idempotency store
+  can collapse a duplicate into a replay or a conflict; they must never treat an
+  unknown as success.
+- Callers own the backoff schedule (delay, jitter, ceiling) and the maximum
+  attempt budget. Because the adapter enforces the command **deadline**, a retry
+  attempted past the deadline fails fast as `deadline_exceeded` rather than
+  dispatching.
+
 ## Breaking route and store contracts
 
 - Route placeholders must occupy complete path segments. Parameter values that

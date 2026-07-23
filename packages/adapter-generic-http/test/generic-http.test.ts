@@ -2542,6 +2542,39 @@ describe("provider acknowledgements", () => {
     });
   });
 
+  it.each([
+    { label: "html", body: "<html>not json</html>" },
+    { label: "prose", body: "accepted, thanks" },
+    { label: "truncated json", body: '{"ok":' },
+  ])(
+    "treats a malformed non-JSON 2xx ($label) as an ambiguous outcome",
+    async ({ body }) => {
+      const scopedCredential = credential(["endpoint.create"]);
+      let dispatched = 0;
+      const adapter = new GenericHttpAdapter(
+        baseConfig(
+          { "endpoint.create": { method: "POST", path: "endpoints" } },
+          async () => {
+            dispatched += 1;
+            return { status: 201, body };
+          },
+          { idempotencyStore: new InMemoryIdempotencyStore() },
+        ),
+      );
+      const result = await adapter.execute(
+        endpointCreate(`malformed-2xx-${body.length}`, scopedCredential),
+      );
+      // The provider was contacted, so a side effect is possible; the adapter
+      // must not fabricate a confirmed outcome from an unparseable body.
+      expect(result).toMatchObject({
+        status: "unknown",
+        sideEffects: "possible",
+      });
+      expect(dispatched).toBe(1);
+      expect(JSON.stringify(result)).not.toContain("html");
+    },
+  );
+
   it("rejects contradictory resource IDs and states without fabricating output", async () => {
     const scopedCredential = credential(["endpoint.create"]);
     for (const options of [

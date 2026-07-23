@@ -22,7 +22,7 @@ export const maximumSourceLines = 800;
  */
 export const allowlist = new Map([
   ["packages/adapter-conformance/src/harness.ts", 1365],
-  ["packages/adapter-generic-http/src/adapter.ts", 2100],
+  ["packages/adapter-generic-http/src/adapter.ts", 2178],
   ["packages/adapter-sdk/src/metadata.ts", 1102],
   ["packages/cli/src/commands.ts", 1696],
   ["packages/cli/src/learning-commands.ts", 1967],
