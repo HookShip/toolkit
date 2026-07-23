@@ -15,12 +15,8 @@ import { PassThrough, Readable, Writable } from "node:stream";
 import { afterEach, describe, expect, it } from "vitest";
 import type { HttpTransport } from "@webhook-portal/adapter-generic-http";
 
-import {
-  atomicWriteFile,
-  CLI_EXIT_CODES,
-  readBoundedStream,
-  runCli,
-} from "../src/index.js";
+import { CLI_EXIT_CODES, runCli } from "../src/index.js";
+import { atomicWriteFile, readBoundedStream } from "../src/io.js";
 import { emitFailure, emitSuccess } from "../src/output.js";
 import {
   AesGcmSecretCipher,
