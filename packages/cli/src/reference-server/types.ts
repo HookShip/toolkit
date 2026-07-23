@@ -516,9 +516,12 @@ export interface EndpointDeletionResult {
   readonly newlyDeleted: boolean;
 }
 
-export interface ReferenceRepositoryTransaction {
+export interface ContractRepository {
   createContractImport(record: ContractImportRecord): Promise<void>;
   getContractImport(id: string): Promise<ContractImportRecord | undefined>;
+}
+
+export interface ReleaseRepository {
   lockReleaseState(): Promise<ReleaseRecord | undefined>;
   publishRelease(input: PublishReleaseInput): Promise<ReleaseRecord>;
   getActiveRelease(): Promise<ReleaseRecord | undefined>;
@@ -538,7 +541,9 @@ export interface ReferenceRepositoryTransaction {
     predecessorReleaseId: string | undefined,
     timestamp: IsoTimestamp,
   ): Promise<PublishCommandRecord>;
+}
 
+export interface EndpointRepository {
   createEndpoint(input: CreateEndpointInput): Promise<EndpointRecord>;
   getEndpoint(id: string): Promise<EndpointRecord | undefined>;
   lockEndpoint(id: string): Promise<EndpointRecord | undefined>;
@@ -554,7 +559,9 @@ export interface ReferenceRepositoryTransaction {
 
   setSubscription(input: SetSubscriptionInput): Promise<SubscriptionRecord>;
   getSubscription(endpointId: string): Promise<SubscriptionRecord | undefined>;
+}
 
+export interface SecretRepository {
   createSecretVersion(
     input: CreateSecretVersionInput,
   ): Promise<SecretVersionRecord>;
@@ -571,7 +578,9 @@ export interface ReferenceRepositoryTransaction {
   listSecretVersions(
     endpointId: string,
   ): Promise<readonly SecretVersionRecord[]>;
+}
 
+export interface TestCommandRepository {
   beginTestCommand(
     input: CreateTestCommandInput,
   ): Promise<BeginTestCommandResult>;
@@ -594,19 +603,25 @@ export interface ReferenceRepositoryTransaction {
     id: string,
     timestamp: IsoTimestamp,
   ): Promise<TestCommandRecord | undefined>;
+}
 
+export interface TimelineRepository {
   acquireTimelineEvidenceLocks(input: TimelineEvidenceLockInput): Promise<void>;
   ingestMetadata(
     records: readonly CanonicalMetadataRecord[],
     ingestedAt: IsoTimestamp,
   ): Promise<MetadataIngestSummary>;
   listTimeline(filters: TimelineFilters): Promise<TimelinePage>;
+}
 
+export interface AuditOutboxRepository {
   appendAudit(record: AuditRecord): Promise<void>;
   listAudit(limit: number): Promise<readonly AuditRecord[]>;
   appendOutbox(record: OutboxRecord): Promise<void>;
   listOutbox(limit: number): Promise<readonly OutboxRecord[]>;
+}
 
+export interface PayloadRepository {
   createPayloadReference(input: CreatePayloadReferenceInput): Promise<void>;
   getPayloadReference(id: string): Promise<PayloadReference | undefined>;
   getPayloadReferenceByObjectKey(
@@ -696,6 +711,22 @@ export interface ReferenceRepositoryTransaction {
   ): Promise<void>;
   completePayloadCleanup(id: string): Promise<void>;
 }
+
+/**
+ * Composition of the segregated repository roles. Implementations satisfy the
+ * whole surface, but callers and role-focused tests can depend on the narrower
+ * role interfaces above (ISP). This composition exists only for wiring.
+ */
+export interface ReferenceRepositoryTransaction
+  extends
+    ContractRepository,
+    ReleaseRepository,
+    EndpointRepository,
+    SecretRepository,
+    TestCommandRepository,
+    TimelineRepository,
+    AuditOutboxRepository,
+    PayloadRepository {}
 
 export interface ReferenceRepository extends ReferenceRepositoryTransaction {
   ping(): Promise<void>;
