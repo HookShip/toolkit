@@ -33,7 +33,6 @@ import {
   type JsonSchema,
   type JsonValue,
   type Sha256Checksum,
-  type SignatureHeader,
   type SignatureProfile,
   type SourcePointer,
 } from "@webhook-portal/canonical-model";
@@ -63,6 +62,7 @@ import {
   stableStringify,
 } from "./json-utils.js";
 import { resolveLimits } from "./limits.js";
+import { inheritedSignature, signatureProfile } from "./signature-profile.js";
 import {
   CONTRACT_CORE_NAME,
   CONTRACT_CORE_VERSION,
@@ -405,96 +405,6 @@ function schemaDialect(
       : document["asyncapi"] === "2.6.0"
         ? JSON_SCHEMA_DRAFT_07_DIALECT
         : JSON_SCHEMA_2020_12_DIALECT)
-  );
-}
-
-function signatureHeaders(
-  value: JsonValue | undefined,
-): SignatureHeader[] | undefined {
-  if (!Array.isArray(value)) {
-    return undefined;
-  }
-
-  const headers: SignatureHeader[] = [];
-  for (const item of value) {
-    if (typeof item === "string") {
-      headers.push({ name: item, required: true });
-    } else if (isJsonObject(item) && typeof item["name"] === "string") {
-      headers.push({
-        name: item["name"],
-        required: item["required"] !== false,
-      });
-    }
-  }
-
-  return headers.length === 0
-    ? undefined
-    : headers.sort((left, right) => compareCodeUnits(left.name, right.name));
-}
-
-function signatureProfile(
-  value: JsonValue | undefined,
-): SignatureProfile | undefined {
-  if (typeof value === "string") {
-    return { name: value };
-  }
-  if (value === true) {
-    return {
-      algorithms: ["hmac-sha256"],
-      headers: [
-        { name: "webhook-id", required: true },
-        { name: "webhook-signature", required: true },
-        { name: "webhook-timestamp", required: true },
-      ],
-      name: "standard-webhooks",
-    };
-  }
-  if (!isJsonObject(value)) {
-    return undefined;
-  }
-
-  const name =
-    asString(value["name"]) ??
-    asString(value["standard"]) ??
-    asString(value["type"]);
-  if (name === undefined) {
-    return undefined;
-  }
-
-  const algorithms = Array.isArray(value["algorithms"])
-    ? value["algorithms"]
-        .filter((item): item is string => typeof item === "string")
-        .sort(compareCodeUnits)
-    : typeof value["algorithm"] === "string"
-      ? [value["algorithm"]]
-      : undefined;
-  const headers = signatureHeaders(value["headers"]);
-  const extensions = collectExtensions(value);
-  return {
-    name,
-    ...(algorithms === undefined || algorithms.length === 0
-      ? {}
-      : { algorithms }),
-    ...(extensions === undefined ? {} : { extensions }),
-    ...(headers === undefined ? {} : { headers }),
-    ...(typeof value["version"] === "string"
-      ? { version: value["version"] }
-      : {}),
-  };
-}
-
-function inheritedSignature(
-  local: JsonObject,
-  parent: JsonObject,
-  document: JsonObject,
-): SignatureProfile | undefined {
-  return (
-    signatureProfile(local["x-signature-profile"]) ??
-    signatureProfile(local["x-standard-webhooks"]) ??
-    signatureProfile(parent["x-signature-profile"]) ??
-    signatureProfile(parent["x-standard-webhooks"]) ??
-    signatureProfile(document["x-signature-profile"]) ??
-    signatureProfile(document["x-standard-webhooks"])
   );
 }
 

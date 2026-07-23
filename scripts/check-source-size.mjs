@@ -34,7 +34,7 @@ export const allowlist = new Map([
   ["packages/cli/src/reference-server/service.ts", 2175],
   ["packages/contract-core/src/diff.ts", 1720],
   ["packages/contract-core/src/fixtures.ts", 1030],
-  ["packages/contract-core/src/normalize.ts", 2313],
+  ["packages/contract-core/src/normalize.ts", 2223],
   ["packages/contract-core/src/schema-processing.ts", 1276],
   ["packages/extension-sdk/src/bundle.ts", 840],
   ["packages/extension-sdk/src/manifest.ts", 1017],
