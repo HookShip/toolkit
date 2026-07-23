@@ -59,7 +59,7 @@ portal-components line floor remains 78 because its displayed 79.00% value is
 | `@webhook-portal/adapter-conformance`   | 84.94 / 85.12 / 96.36 / 76.14 | 84 / 85 / 96 / 76 |
 | `@webhook-portal/adapter-generic-http`  | 81.47 / 81.44 / 93.37 / 70.13 | 81 / 81 / 93 / 70 |
 | `@webhook-portal/adapter-sdk`           | 82.33 / 82.19 / 87.32 / 77.76 | 82 / 82 / 87 / 77 |
-| `@webhook-portal/canonical-model`       | 85.54 / 85.71 / 73.91 / 62.21 | 85 / 85 / 73 / 62 |
+| `@webhook-portal/canonical-model`       | 88.03 / 87.87 / 87.23 / 71.72 | 87 / 87 / 86 / 70 |
 | `@webhook-portal/cli`                   | 56.89 / 56.79 / 60.81 / 48.17 | 56 / 56 / 60 / 48 |
 | `@webhook-portal/compatibility-report`  | 92.78 / 92.61 / 96.00 / 86.36 | 92 / 92 / 96 / 86 |
 | `@webhook-portal/contract-core`         | 83.78 / 82.79 / 91.64 / 73.76 | 83 / 82 / 91 / 73 |
@@ -74,6 +74,17 @@ When coverage intentionally improves or the source scope changes, run the root
 command, review `coverage/coverage-summary.json`, update
 `scripts/coverage.config.mjs`, and update this table in the same change.
 Lowering a floor requires an explicit justification.
+
+## Known coverage debt
+
+`@webhook-portal/cli` branch coverage (floor 48) is dominated by the
+reference-server implementation, whose failure paths in
+`postgres-repository.ts`, `server.ts`, and the payload-maintenance and migration
+code are only exercised end-to-end against a live Postgres/MinIO stack (the
+Compose-gated `test:integration` suite, skipped in the default run). Raising
+this floor materially requires running or faking that stack; the in-memory
+repository and service tests here cover the provider-agnostic branches. This is
+tracked as a deliberate follow-up rather than excluded code.
 
 ## Provenance
 

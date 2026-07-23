@@ -17,6 +17,7 @@ import {
   renderCompatibilityReportMarkdown,
   verifyCompatibilityReport,
 } from "../src/index.js";
+import { SEVERITY_PRIORITY_MATRIX, matrixFor } from "../src/narratives.js";
 
 const baseSchema: JsonSchema = {
   additionalProperties: false,
@@ -365,5 +366,30 @@ describe("compatibility report", () => {
         diff: diffContracts(previous, previous),
       }),
     ).toThrow("Diff next checksum does not match next contract");
+  });
+});
+
+describe("severity/priority matrix", () => {
+  it("maps every compatibility status to its severity and priority", () => {
+    expect(matrixFor("breaking")).toEqual({
+      priority: "P0",
+      severity: "critical",
+    });
+    expect(matrixFor("unknown")).toEqual({ priority: "P1", severity: "high" });
+    expect(matrixFor("compatible")).toEqual({
+      priority: "P2",
+      severity: "low",
+    });
+    expect(matrixFor("docs-only")).toEqual({
+      priority: "P3",
+      severity: "informational",
+    });
+    for (const status of Object.keys(SEVERITY_PRIORITY_MATRIX)) {
+      expect(matrixFor(status as keyof typeof SEVERITY_PRIORITY_MATRIX)).toBe(
+        SEVERITY_PRIORITY_MATRIX[
+          status as keyof typeof SEVERITY_PRIORITY_MATRIX
+        ],
+      );
+    }
   });
 });

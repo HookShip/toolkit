@@ -164,6 +164,34 @@ describe("provider-neutral inventory imports", () => {
     );
   });
 
+  it("flags duplicate event subscriptions on an endpoint", () => {
+    const source = JSON.parse(fixture("svix")) as Record<string, unknown>;
+    const endpoints = source["endpoints"] as Record<string, unknown>[];
+    const subscriptions = endpoints[0]!["subscriptions"] as Record<
+      string,
+      unknown
+    >[];
+    subscriptions.push(structuredClone(subscriptions[0]));
+
+    const result = parseSvixInventoryExport(JSON.stringify(source));
+
+    expect(result.diagnostics.map((item) => item.code)).toContain(
+      "DUPLICATE_SUBSCRIPTION",
+    );
+  });
+
+  it("rejects a non-http destination kind", () => {
+    const source = JSON.parse(fixture("svix")) as Record<string, unknown>;
+    const destinations = source["destinations"] as Record<string, unknown>[];
+    destinations[0]!["kind"] = "grpc";
+
+    const result = parseSvixInventoryExport(JSON.stringify(source));
+
+    expect(result.diagnostics.map((item) => item.code)).toContain(
+      "INVALID_ENUM",
+    );
+  });
+
   it.each(["secret", "apiKey", "authorization", "headers", "payload"])(
     "rejects credential-shaped field %s before import",
     (field) => {
@@ -432,5 +460,43 @@ describe("migration assessment", () => {
     inventory.token = "forbidden";
 
     expect(() => assess(inventory)).toThrow(AssessmentInputError);
+  });
+});
+
+describe("assessment rendering with issues", () => {
+  it("renders blocker issue lists with escaped source identifiers", () => {
+    const result = assess(parsedInventory("svix"), undefined, {
+      "endpoint.create": "unsupported",
+      "subscription.replace": "unsupported",
+    });
+    expect(result.blockers.length).toBeGreaterThan(0);
+    expect(result.blockers.some((issue) => issue.sourceId !== undefined)).toBe(
+      true,
+    );
+
+    const markdown = renderAssessmentMarkdown(result);
+    // The issue-list branch renders bolded codes rather than the "- None"
+    // placeholder used for empty lists.
+    expect(markdown).toContain("**");
+    expect(markdown.length).toBeGreaterThan(200);
+
+    const json = JSON.parse(renderAssessmentJson(result)) as {
+      readonly blockers: readonly unknown[];
+    };
+    expect(json.blockers.length).toBe(result.blockers.length);
+  });
+
+  it("renders endpoint event mappings and honors the byte budget", () => {
+    const mapped = assess(parsedInventory("hookship-native"));
+    expect(mapped.endpointMappings.length).toBeGreaterThan(0);
+
+    const full = renderAssessmentMarkdown(mapped);
+    expect(full).toContain("## Endpoint and event mapping plan");
+
+    // A tight byte budget is a hard cap: rendering fails closed rather than
+    // truncating.
+    expect(() => renderAssessmentMarkdown(mapped, { maxBytes: 256 })).toThrow(
+      /bytes; maximum is 256/u,
+    );
   });
 });

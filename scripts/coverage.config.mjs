@@ -28,10 +28,13 @@ const measuredBaselines = {
     statements: 82.19,
   },
   "@webhook-portal/canonical-model": {
-    branches: 62.21,
-    functions: 73.91,
-    lines: 85.54,
-    statements: 85.71,
+    // Raised from (62.21, 73.91, 85.54, 85.71) after the single-source
+    // canonical serializer and its golden/redaction/edge tests landed here.
+    // Kept a safety margin below the measured (71.72/87.23/88.03/87.87).
+    branches: 70,
+    functions: 86,
+    lines: 87,
+    statements: 87,
   },
   "@webhook-portal/cli": {
     branches: 48.17,

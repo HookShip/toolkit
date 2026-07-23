@@ -13,6 +13,7 @@ import {
   MAX_COMMAND_REPLAY_RETENTION_MILLISECONDS,
   REDACTED_SECRET,
   SecretValue,
+  adapterCommandOperation,
   canonicalizeMetadataRecord,
   checkCredentialScope,
   commandReplayIdentityStorageKey,
@@ -22,6 +23,7 @@ import {
   createAuthenticatedMetadataIngestEnvelope,
   createCapabilityDocument,
   createDeadlineSignal,
+  createDedupeKey,
   completeCommandEnvelopeReplay,
   deadlineAfter,
   deliveryAttemptDedupeKey,
@@ -1371,5 +1373,36 @@ describe("deadline and secret primitives", () => {
         now,
       }),
     ).toEqual({ ok: false, reason: "connection_scope_mismatch" });
+  });
+});
+
+describe("command and dedupe-key helpers", () => {
+  it("reports the operation kind for a command", () => {
+    expect(adapterCommandOperation(endpointCommand())).toBe("endpoint.create");
+  });
+
+  it("derives a stable dedupe key independent of part ordering", () => {
+    const first = createDedupeKey("delivery", {
+      attempt: 1,
+      endpoint: "endpoint-1",
+      terminal: false,
+    });
+    const reordered = createDedupeKey("delivery", {
+      terminal: false,
+      endpoint: "endpoint-1",
+      attempt: 1,
+    });
+    expect(first).toBe(reordered);
+    expect(first).toMatch(/^whp:delivery:v2:[a-f0-9]{64}$/u);
+    expect(
+      createDedupeKey("delivery", { attempt: 2, endpoint: "endpoint-1" }),
+    ).not.toBe(first);
+  });
+
+  it("rejects an unsafe dedupe namespace", () => {
+    expect(() => createDedupeKey("", { a: 1 })).toThrow(RangeError);
+    expect(() => createDedupeKey("x".repeat(129), { a: 1 })).toThrow(
+      RangeError,
+    );
   });
 });
