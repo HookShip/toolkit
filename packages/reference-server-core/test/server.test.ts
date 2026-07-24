@@ -1884,3 +1884,43 @@ describe("reference server", () => {
     expect(test.repository.closed).toBe(true);
   });
 });
+
+describe("reference server HTTP surface", () => {
+  it("exposes a stable documented operation set", async () => {
+    const test = await harness();
+    const response = await test.app.inject({
+      method: "GET",
+      url: "/openapi.json",
+    });
+    expect(response.statusCode).toBe(200);
+    const document = JSON.parse(response.body) as {
+      readonly paths: Record<string, Record<string, unknown>>;
+    };
+    const operations = Object.entries(document.paths)
+      .flatMap(([routePath, methods]) =>
+        Object.keys(methods).map(
+          (method) => `${method.toUpperCase()} ${routePath}`,
+        ),
+      )
+      .sort();
+    expect(operations).toMatchSnapshot();
+  });
+
+  it("keeps the unauthenticated and operational endpoints reachable", async () => {
+    const test = await harness();
+    for (const url of [
+      "/health/live",
+      "/health/ready",
+      "/metrics",
+      "/openapi.json",
+      "/docs",
+      "/",
+    ]) {
+      const response = await test.app.inject({ method: "GET", url });
+      expect(
+        response.statusCode,
+        `expected ${url} to be reachable`,
+      ).toBeLessThan(500);
+    }
+  });
+});

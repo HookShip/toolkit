@@ -1,0 +1,35 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`reference server HTTP surface > exposes a stable documented operation set 1`] = `
+[
+  "DELETE /v1/endpoints/{id}",
+  "GET /health/live",
+  "GET /health/maintenance",
+  "GET /health/ready",
+  "GET /v1/audit",
+  "GET /v1/contracts/imports/{id}",
+  "GET /v1/endpoints",
+  "GET /v1/endpoints/{id}",
+  "GET /v1/endpoints/{id}/cleanup",
+  "GET /v1/endpoints/{id}/secrets",
+  "GET /v1/endpoints/{id}/send-test/status",
+  "GET /v1/endpoints/{id}/subscriptions",
+  "GET /v1/events",
+  "GET /v1/releases",
+  "GET /v1/releases/publish/status",
+  "GET /v1/releases/{id}",
+  "GET /v1/timeline",
+  "PATCH /v1/endpoints/{id}",
+  "POST /v1/contracts/import",
+  "POST /v1/endpoints",
+  "POST /v1/endpoints/{endpointId}/secrets/{secretId}/revoke",
+  "POST /v1/endpoints/{id}/cleanup/retry",
+  "POST /v1/endpoints/{id}/secrets",
+  "POST /v1/endpoints/{id}/secrets/rotate",
+  "POST /v1/endpoints/{id}/send-test",
+  "POST /v1/ingest",
+  "POST /v1/releases/publish",
+  "POST /v1/test-receiver/{endpointId}",
+  "PUT /v1/endpoints/{id}/subscriptions",
+]
+`;
