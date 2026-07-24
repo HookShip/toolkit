@@ -72,6 +72,7 @@ const entryPoints = [
   "@webhook-portal/migration-assessment",
   "@webhook-portal/support-evidence",
   "@webhook-portal/portal-components",
+  "@webhook-portal/reference-server-core",
   "@webhook-portal/cli",
   "@webhook-portal/cli/reference-server",
 ];

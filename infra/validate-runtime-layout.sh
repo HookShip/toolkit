@@ -27,7 +27,7 @@ for (const relative of [
   "README.md",
   "dist/index.js",
   "dist/migrate.js",
-  "node_modules/@webhook-portal/cli/dist/reference-server/runtime.js",
+  "node_modules/@webhook-portal/reference-server-core/dist/runtime.js",
 ]) {
   await access(path.join(root, relative));
 }
@@ -47,9 +47,9 @@ for (const unwanted of [
 
 for (const relative of [
   "test",
-  "node_modules/@webhook-portal/cli/src",
-  "node_modules/@webhook-portal/cli/test",
-  "node_modules/@webhook-portal/cli/tsconfig.test.json",
+  "node_modules/@webhook-portal/reference-server-core/src",
+  "node_modules/@webhook-portal/reference-server-core/test",
+  "node_modules/@webhook-portal/reference-server-core/tsconfig.test.json",
 ]) {
   try {
     await access(path.join(root, relative));

@@ -20,6 +20,9 @@ importers:
       '@webhook-portal/cli':
         specifier: workspace:*
         version: link:packages/cli
+      '@webhook-portal/reference-server-core':
+        specifier: workspace:*
+        version: link:packages/reference-server-core
       eslint:
         specifier: 10.7.0
         version: 10.7.0

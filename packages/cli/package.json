@@ -42,11 +42,10 @@
     "access": "public"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "rm -rf dist && tsc -p tsconfig.json",
     "lint": "eslint src test",
     "test": "vitest run",
     "test:coverage": "node ../../scripts/test-coverage.mjs --project packages/cli",
-    "test:integration": "vitest run test/reference-migrations.test.ts test/reference-repository.contract.test.ts test/reference-minio.integration.test.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test.json"
   },
   "dependencies": {

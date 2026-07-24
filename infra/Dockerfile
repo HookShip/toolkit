@@ -16,11 +16,10 @@ RUN pnpm --config.inject-workspace-packages=true \
 
 FROM build AS integration-test
 
-RUN test -f packages/cli/test/reference-migrations.test.ts \
-  && test -f packages/cli/test/reference-minio.integration.test.ts \
-  && test -f packages/cli/test/reference-repository.contract.test.ts \
-  && test -f infra/migrations/011_store_derived_bucket.sql \
-  && test "$(find packages/cli/test -maxdepth 1 -type f | wc -l)" -eq 3
+RUN test -f packages/reference-server-core/test/reference-migrations.test.ts \
+  && test -f packages/reference-server-core/test/reference-minio.integration.test.ts \
+  && test -f packages/reference-server-core/test/reference-repository.contract.test.ts \
+  && test -f infra/migrations/011_store_derived_bucket.sql
 
 CMD ["pnpm", "test:integration:reference"]
 

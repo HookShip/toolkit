@@ -91,9 +91,9 @@ for (const safeTemplatePath of [
 const required = new Set([
   "infra/.env.example",
   "infra/migrations/010_payload_store_identity.sql",
-  "packages/cli/test/reference-migrations.test.ts",
-  "packages/cli/test/reference-minio.integration.test.ts",
-  "packages/cli/test/reference-repository.contract.test.ts",
+  "packages/reference-server-core/test/reference-migrations.test.ts",
+  "packages/reference-server-core/test/reference-minio.integration.test.ts",
+  "packages/reference-server-core/test/reference-repository.contract.test.ts",
 ]);
 
 async function listSourceFiles(directory) {

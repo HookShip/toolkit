@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: Apache-2.0
 #
-# Packs all 13 public packages with `pnpm pack` and verifies the package
+# Packs all 14 public packages with `pnpm pack` and verifies the package
 # that a real `npm install` would actually produce, independent of the
 # in-workspace build tree:
 #   - LICENSE, README, and package.json are present (LICENSE is injected
@@ -28,14 +28,23 @@ while IFS= read -r package_dir; do
 done < <(node scripts/release.mjs list-packages)
 
 WORKDIR="$ROOT/.pack-smoke-work"
+# A negative "CLI-only" install must live OUTSIDE the repository tree: Node's
+# upward node_modules resolution would otherwise reach the workspace root (which
+# has the reference-server-core devDependency) and mask the very absence we are
+# asserting.
+EXTERNAL_WORKDIR="$(mktemp -d 2>/dev/null || echo "${TMPDIR:-/tmp}/pack-smoke-cli-only.$$")"
 cleanup() {
-  rm -rf "$WORKDIR"
+  rm -rf "$WORKDIR" "$EXTERNAL_WORKDIR"
 }
 trap cleanup EXIT
 rm -rf "$WORKDIR"
-mkdir -p "$WORKDIR"
+mkdir -p "$WORKDIR" "$EXTERNAL_WORKDIR"
 
 TARBALLS=()
+# Tarballs a CLI-only consumer would resolve: the full cohort minus the
+# optional reference-server-core runtime, used to prove the CLI does not pull
+# Fastify/PG/MinIO unless the server runtime is explicitly installed.
+CLI_COHORT_TARBALLS=()
 
 echo "Packing ${#PACKAGES[@]} publishable package(s) into $WORKDIR ..."
 
@@ -55,6 +64,9 @@ for package_dir in "${PACKAGES[@]}"; do
     exit 1
   fi
   TARBALLS+=("$tarball")
+  if [[ "$name" != "@webhook-portal/reference-server-core" ]]; then
+    CLI_COHORT_TARBALLS+=("$tarball")
+  fi
 
   extract_dir="$WORKDIR/extract/$(basename "$package_dir")"
   mkdir -p "$extract_dir"
@@ -174,6 +186,7 @@ mkdir -p "$install_dir"
       "@webhook-portal/migration-assessment",
       "@webhook-portal/support-evidence",
       "@webhook-portal/portal-components",
+      "@webhook-portal/reference-server-core",
       "@webhook-portal/cli",
       "@webhook-portal/cli/reference-server",
     ];
@@ -186,16 +199,11 @@ mkdir -p "$install_dir"
     }
   '
 
-  if [[ ! -f node_modules/@types/pg/package.json ]]; then
-    echo "packed CLI did not install @types/pg as a production dependency" >&2
-    exit 1
-  fi
-
   cat > consumer.ts <<'EOF'
 import {
   PostgresReferenceRepository,
   type BuildReferenceServerOptions,
-} from "@webhook-portal/cli/reference-server";
+} from "@webhook-portal/reference-server-core";
 
 const repositoryConstructor = PostgresReferenceRepository;
 const acceptsOptions = (options: BuildReferenceServerOptions): void => {
@@ -220,7 +228,7 @@ EOF
 }
 EOF
   ./node_modules/.bin/tsc --project tsconfig.json
-  echo "  compiled a clean TypeScript consumer of the packed reference-server export"
+  echo "  compiled a clean TypeScript consumer of the packed reference-server-core export"
 
   help_output="$(./node_modules/.bin/webhook-portal --help)"
   if [[ "$help_output" != *"Usage: webhook-portal <command> [options]"* ]]; then
@@ -228,6 +236,55 @@ EOF
     exit 1
   fi
   echo "  invoked packed webhook-portal binary"
+)
+
+echo
+echo "Verifying a CLI-only install stays free of the reference-server runtime ..."
+cli_only_dir="$EXTERNAL_WORKDIR/cli-only-install"
+mkdir -p "$cli_only_dir"
+(
+  cd "$cli_only_dir"
+  npm init --yes >/dev/null 2>&1
+  # Install the cohort without the optional reference-server-core runtime, as a
+  # CLI-only consumer would: its optional peer is skipped, so none of Fastify,
+  # PG, MinIO, or Swagger should be present in the resulting tree.
+  npm install --no-audit --no-fund --omit=dev "${CLI_COHORT_TARBALLS[@]}"
+
+  for forbidden in fastify pg minio @fastify; do
+    if [[ -e "node_modules/$forbidden" ]]; then
+      echo "CLI-only install unexpectedly pulled $forbidden" >&2
+      exit 1
+    fi
+  done
+  echo "  confirmed Fastify/PG/MinIO/Swagger are absent from a CLI-only install"
+
+  node --input-type=module -e '
+    const cli = await import("@webhook-portal/cli");
+    if (typeof cli.runCli !== "function") {
+      throw new Error("CLI entry point is missing runCli");
+    }
+    let subpathResolved = true;
+    try {
+      await import("@webhook-portal/cli/reference-server");
+    } catch {
+      subpathResolved = false;
+    }
+    if (subpathResolved) {
+      throw new Error(
+        "deprecated reference-server subpath resolved without the optional core package",
+      );
+    }
+    console.log(
+      "  base CLI imports; deprecated reference-server subpath fails closed without core",
+    );
+  '
+
+  help_output="$(./node_modules/.bin/webhook-portal --help)"
+  if [[ "$help_output" != *"Usage: webhook-portal <command> [options]"* ]]; then
+    echo "CLI-only packed binary did not return the expected help output" >&2
+    exit 1
+  fi
+  echo "  invoked the CLI-only webhook-portal binary"
 )
 
 echo

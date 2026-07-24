@@ -32,7 +32,7 @@ import {
   DisabledPayloadStorage,
   InMemoryReferenceRepository,
   buildReferenceServer,
-} from "@webhook-portal/cli/reference-server";
+} from "@webhook-portal/reference-server-core";
 
 const repoRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),

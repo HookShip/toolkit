@@ -7,11 +7,11 @@
 **/dist
 **/node_modules
 **/test
-!packages/cli/test
-packages/cli/test/*
-!packages/cli/test/reference-migrations.test.ts
-!packages/cli/test/reference-minio.integration.test.ts
-!packages/cli/test/reference-repository.contract.test.ts
+!packages/reference-server-core/test
+packages/reference-server-core/test/*
+!packages/reference-server-core/test/reference-migrations.test.ts
+!packages/reference-server-core/test/reference-minio.integration.test.ts
+!packages/reference-server-core/test/reference-repository.contract.test.ts
 **/tsconfig.test.json
 coverage
 examples
