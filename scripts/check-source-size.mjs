@@ -29,7 +29,6 @@ export const allowlist = new Map([
   ["packages/reference-server-core/src/payload-storage.ts", 1827],
   ["packages/reference-server-core/src/postgres-repository.ts", 2504],
   ["packages/reference-server-core/src/server.ts", 2332],
-  ["packages/reference-server-core/src/service.ts", 2175],
   ["packages/contract-core/src/diff.ts", 1720],
   ["packages/contract-core/src/fixtures.ts", 1030],
   ["packages/extension-sdk/src/bundle.ts", 840],
