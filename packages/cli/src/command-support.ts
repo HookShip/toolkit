@@ -36,6 +36,13 @@ export interface CliDependencies {
   readonly now?: () => Date;
   readonly startServer?: typeof startReferenceServerFromEnv;
   readonly migrateServer?: typeof migrateReferenceServerFromEnv;
+  /**
+   * Optional cooperative shutdown trigger for the `serve` command. When
+   * omitted, `serve` waits for an OS SIGINT/SIGTERM; tests and embedding hosts
+   * can inject an {@link AbortSignal} to request a graceful close without
+   * raising a process-wide signal.
+   */
+  readonly shutdownSignal?: AbortSignal;
 }
 
 /** Structural view of the streams a command reads from and writes to. */

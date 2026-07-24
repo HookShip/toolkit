@@ -33,6 +33,9 @@ function dependenciesWithDefaults(input: RunCliDependencies): CliDependencies {
     ...(input.migrateServer === undefined
       ? {}
       : { migrateServer: input.migrateServer }),
+    ...(input.shutdownSignal === undefined
+      ? {}
+      : { shutdownSignal: input.shutdownSignal }),
   };
 }
 

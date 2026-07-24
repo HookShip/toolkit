@@ -156,7 +156,9 @@ describe("CLI dispatch and usage errors", () => {
 describe("serve and migrate commands", () => {
   async function runWith(
     argv: readonly string[],
-    deps: Partial<Pick<CliDependencies, "migrateServer" | "startServer">>,
+    deps: Partial<
+      Pick<CliDependencies, "migrateServer" | "startServer" | "shutdownSignal">
+    >,
   ): Promise<{ exitCode: number; stdout: string; stderr: string }> {
     const stdout = new Capture();
     const stderr = new Capture();
@@ -172,6 +174,9 @@ describe("serve and migrate commands", () => {
       ...(deps.startServer === undefined
         ? {}
         : { startServer: deps.startServer }),
+      ...(deps.shutdownSignal === undefined
+        ? {}
+        : { shutdownSignal: deps.shutdownSignal }),
     });
     return { exitCode, stdout: stdout.toString(), stderr: stderr.toString() };
   }
@@ -207,9 +212,11 @@ describe("serve and migrate commands", () => {
     expect(result.exitCode).not.toBe(CLI_EXIT_CODES.success);
   });
 
-  it("serves until an interrupt triggers a graceful shutdown", async () => {
+  it("serves until a shutdown signal triggers a graceful close", async () => {
     let closed = false;
+    const shutdown = new AbortController();
     const promise = runWith(["serve", "--json"], {
+      shutdownSignal: shutdown.signal,
       startServer: (async () => ({
         address: "http://127.0.0.1:65535",
         close: async () => {
@@ -218,7 +225,7 @@ describe("serve and migrate commands", () => {
       })) as NonNullable<CliDependencies["startServer"]>,
     });
     await new Promise((resolve) => setTimeout(resolve, 50));
-    process.emit("SIGTERM");
+    shutdown.abort();
     const result = await promise;
     expect(result.exitCode).toBe(CLI_EXIT_CODES.success);
     expect(closed).toBe(true);

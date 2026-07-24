@@ -65,7 +65,10 @@ interface ReferenceServerHandle {
   close(): Promise<void>;
 }
 
-async function waitForShutdown(running: ReferenceServerHandle): Promise<void> {
+async function waitForShutdown(
+  running: ReferenceServerHandle,
+  shutdownSignal?: AbortSignal,
+): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     let closing = false;
     const shutdown = (): void => {
@@ -73,8 +76,16 @@ async function waitForShutdown(running: ReferenceServerHandle): Promise<void> {
         return;
       }
       closing = true;
+      process.removeListener("SIGINT", shutdown);
+      process.removeListener("SIGTERM", shutdown);
+      shutdownSignal?.removeEventListener("abort", shutdown);
       void running.close().then(resolve, reject);
     };
+    if (shutdownSignal?.aborted === true) {
+      shutdown();
+      return;
+    }
+    shutdownSignal?.addEventListener("abort", shutdown, { once: true });
     process.once("SIGINT", shutdown);
     process.once("SIGTERM", shutdown);
   });
@@ -117,6 +128,6 @@ export async function serveCommand(
     { command: "serve", address: running.address },
     [`Reference server listening at ${running.address}`],
   );
-  await waitForShutdown(running);
+  await waitForShutdown(running, dependencies.shutdownSignal);
   return CLI_EXIT_CODES.success;
 }
