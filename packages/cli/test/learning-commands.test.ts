@@ -716,3 +716,185 @@ describe("support evidence", () => {
     expect(result.stderr).toContain("STDIN_CONFLICT");
   });
 });
+
+describe("migration-assess input validation", () => {
+  const malformedPolicies: ReadonlyArray<Record<string, unknown>> = [
+    { rate: { supported: "yes" } },
+    { rate: {} },
+    { rate: { supported: true, maxRequestsPerSecond: -1 } },
+    { retry: { supported: 1 } },
+    { retry: {} },
+    { endpointLimit: -1 },
+    { endpointLimit: 1.5 },
+    { subscriptionLimitPerEndpoint: "x" },
+    { requireHttps: "true" },
+    { allowedSigningAlgorithms: "hmac" },
+    { allowedSigningAlgorithms: [1] },
+    { unknownKey: true },
+    { minimumRetention: { deliveryLogDays: -1 } },
+    { minimumRetention: { unknownKey: 1 } },
+    { observability: { deliveryLogs: "yes" } },
+    { apiKey: "sk_live_0123456789abcdefABCDEF" },
+  ];
+
+  it.each(malformedPolicies)(
+    "rejects malformed target policy %#",
+    async (policy) => {
+      const directory = await scratch();
+      const paths = await writeLearningFixtures(directory);
+      const policyPath = path.join(directory, "policy.json");
+      await writeFile(policyPath, JSON.stringify(policy));
+      const result = await invoke([
+        "migration-assess",
+        paths.inventory,
+        paths.previous,
+        "--target-capabilities",
+        paths.capabilities,
+        "--target-policy",
+        policyPath,
+        "--json",
+      ]);
+      expect(result.exitCode).not.toBe(CLI_EXIT_CODES.success);
+    },
+  );
+
+  const malformedCapabilities: ReadonlyArray<Record<string, unknown>> = [
+    {
+      adapter: { id: "x", name: "x", version: "1" },
+      capabilities: { "endpoint.create": "bogus" },
+    },
+    {
+      adapter: { id: "x", name: "x", version: "1" },
+      capabilities: { "endpoint.create": { operation: "endpoint.delete" } },
+    },
+    {
+      adapter: { id: "x", name: "x", version: "1" },
+      capabilities: { "endpoint.create": { unknownKey: 1 } },
+    },
+    { unknownTopKey: true },
+  ];
+
+  it.each(malformedCapabilities)(
+    "rejects malformed target capabilities %#",
+    async (caps) => {
+      const directory = await scratch();
+      const paths = await writeLearningFixtures(directory);
+      const capsPath = path.join(directory, "bad-capabilities.json");
+      await writeFile(capsPath, JSON.stringify(caps));
+      const result = await invoke([
+        "migration-assess",
+        paths.inventory,
+        paths.previous,
+        "--target-capabilities",
+        capsPath,
+        "--json",
+      ]);
+      expect(result.exitCode).not.toBe(CLI_EXIT_CODES.success);
+    },
+  );
+});
+
+describe("support-evidence input validation and options", () => {
+  const malformedTimelines: ReadonlyArray<unknown> = [
+    {},
+    { records: "not-array" },
+    { records: [] },
+    { records: [{ kind: "delivery_attempt" }] },
+    { records: [{ ...timeline().records[0], status: "bogus-status" }] },
+    { records: [{ ...timeline().records[0], attempt: -1 }] },
+    { response: {}, command: "not-timeline" },
+    "a string",
+  ];
+
+  it.each(malformedTimelines.map((value, index) => [index, value] as const))(
+    "rejects malformed evidence timeline %i",
+    async (_index, value) => {
+      const directory = await scratch();
+      const paths = await writeLearningFixtures(directory);
+      const badTimeline = path.join(directory, "bad-timeline.json");
+      await writeFile(badTimeline, JSON.stringify(value));
+      const result = await invoke(
+        [
+          "support-evidence",
+          badTimeline,
+          "--case-id",
+          "case_synthetic_001",
+          "--scope",
+          paths.scope,
+          "--from",
+          "2026-07-18T10:00:00.000Z",
+          "--to",
+          "2026-07-18T10:03:00.000Z",
+          "--json",
+        ],
+        { now: evidenceNow },
+      );
+      expect(result.exitCode).not.toBe(CLI_EXIT_CODES.success);
+    },
+  );
+
+  const malformedScopes: ReadonlyArray<unknown> = [
+    { tenantId: "not-object" },
+    {
+      tenantId: { kind: "bogus", value: "t" },
+      environmentId: { kind: "opaque", value: "e" },
+    },
+    { tenantId: { kind: "opaque", value: "sk_live_0123456789abcdef" } },
+  ];
+
+  it.each(malformedScopes.map((value, index) => [index, value] as const))(
+    "rejects malformed evidence scope %i",
+    async (_index, value) => {
+      const directory = await scratch();
+      const paths = await writeLearningFixtures(directory);
+      const badScope = path.join(directory, "bad-scope.json");
+      await writeFile(badScope, JSON.stringify(value));
+      const result = await invoke(
+        [
+          "support-evidence",
+          paths.timeline,
+          "--case-id",
+          "case_synthetic_001",
+          "--scope",
+          badScope,
+          "--from",
+          "2026-07-18T10:00:00.000Z",
+          "--to",
+          "2026-07-18T10:03:00.000Z",
+          "--json",
+        ],
+        { now: evidenceNow },
+      );
+      expect(result.exitCode).not.toBe(CLI_EXIT_CODES.success);
+    },
+  );
+
+  it("rejects invalid lifetime and purpose options", async () => {
+    const directory = await scratch();
+    const paths = await writeLearningFixtures(directory);
+    const base = evidenceArgs(paths);
+    for (const extra of [
+      ["--lifetime", "-1"],
+      ["--lifetime", "not-a-number"],
+      ["--purpose", "unsupported-purpose"],
+    ] as const) {
+      const result = await invoke([...base, ...extra, "--json"], {
+        now: evidenceNow,
+      });
+      expect(result.exitCode).not.toBe(CLI_EXIT_CODES.success);
+    }
+  });
+
+  it("writes markdown evidence to a file with --out", async () => {
+    const directory = await scratch();
+    const paths = await writeLearningFixtures(directory);
+    const outPath = path.join(directory, "evidence.md");
+    const result = await invoke(
+      [...evidenceArgs(paths), "--format", "markdown", "--out", outPath],
+      { now: evidenceNow },
+    );
+    expect(result.exitCode).toBe(CLI_EXIT_CODES.success);
+    const written = await readFile(outPath, "utf8");
+    expect(written.length).toBeGreaterThan(0);
+  });
+});

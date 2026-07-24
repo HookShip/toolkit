@@ -31,14 +31,15 @@
     "release:stage": "node scripts/release.mjs stage",
     "smoke": "pnpm build && node scripts/smoke.mjs",
     "test": "pnpm test:required",
-    "test:coverage": "node scripts/test-coverage.mjs",
+    "test:coverage": "node scripts/coverage-services.mjs -- node scripts/test-coverage.mjs",
     "test:extensions": "node --test extensions/test/seed-packs.test.mjs",
     "test:hygiene": "node --test scripts/test-hygiene.test.mjs",
     "test:integration:reference": "pnpm --filter @webhook-portal/cli test:integration",
     "test:live:reference": "docker compose --profile integration --env-file infra/.env -f infra/docker-compose.yml run --rm --build integration-tests",
     "test:required": "pnpm test:hygiene && turbo run test && pnpm test:extensions",
     "test:verdaccio": "node scripts/verdaccio-harness.mjs",
-    "typecheck": "turbo run typecheck"
+    "typecheck": "turbo run typecheck",
+    "test:coverage:unit": "node scripts/test-coverage.mjs"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

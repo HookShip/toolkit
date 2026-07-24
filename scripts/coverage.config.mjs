@@ -9,6 +9,15 @@ const measuredBaselines = {
     lines: 0,
     statements: 0,
   },
+  "@webhook-portal/reference-server-core": {
+    // Measured under the disposable Postgres + MinIO integration provisioned by
+    // scripts/coverage-services.mjs (78.07/78.19/86.28/68.61); kept below the
+    // measured values for async-timing margin. Branch floor is >= 65.
+    branches: 66,
+    functions: 84,
+    lines: 76,
+    statements: 76,
+  },
   "@webhook-portal/adapter-conformance": {
     branches: 76.14,
     functions: 96.36,
@@ -37,10 +46,13 @@ const measuredBaselines = {
     statements: 87,
   },
   "@webhook-portal/cli": {
-    branches: 48.17,
-    functions: 60.81,
-    lines: 56.89,
-    statements: 56.79,
+    // Raised after the reference-server extraction shrank the CLI and new
+    // command failure-path tests landed (56.79/56.89/60.81/48.17 ->
+    // 80.43/80.70/91.82/65.34). Branch floor is >= 65.
+    branches: 65,
+    functions: 91,
+    lines: 80,
+    statements: 80,
   },
   "@webhook-portal/compatibility-report": {
     branches: 86.36,
@@ -139,8 +151,12 @@ export const coverageExclude = [
 export const coverageProjects = [
   project("@webhook-portal/reference-server", "apps/reference-server", {
     coverageException:
-      "This private Apache-2.0 app is a thin process and migration wrapper around the tested @webhook-portal/cli reference-server implementation. Its entry-point scaffolds are exercised by smoke and Compose validation.",
+      "This private Apache-2.0 app is a thin process and migration wrapper around the tested @webhook-portal/reference-server-core runtime. Its entry-point scaffolds are exercised by smoke and Compose validation.",
   }),
+  project(
+    "@webhook-portal/reference-server-core",
+    "packages/reference-server-core",
+  ),
   project(
     "@webhook-portal/adapter-conformance",
     "packages/adapter-conformance",
@@ -190,10 +206,10 @@ export const coverageProjects = [
 export const workspaceCoverageExclusions = [];
 
 export const aggregateBaseline = {
-  branches: 65.7,
-  functions: 80.98,
-  lines: 74.73,
-  statements: 74.61,
+  branches: 70.5,
+  functions: 89.5,
+  lines: 80.9,
+  statements: 80.9,
 };
 export const aggregateThresholds = thresholdsFor(aggregateBaseline);
 

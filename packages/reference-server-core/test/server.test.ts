@@ -17,7 +17,7 @@ import {
   type PayloadMaintenanceController,
   type PayloadObjectPage,
   type ReferenceServerConfig,
-} from "@webhook-portal/reference-server-core";
+} from "../src/index.js";
 import { WebhookSecret, tryVerifyWebhook } from "@webhook-portal/signing";
 import { afterEach, describe, expect, it } from "vitest";
 

@@ -1349,3 +1349,94 @@ describe("CLI", () => {
     }
   });
 });
+
+describe("CLI publish and timeline server-response errors", () => {
+  function json(body: unknown, status: number): Response {
+    return new Response(JSON.stringify(body), {
+      headers: { "content-type": "application/json" },
+      status,
+    });
+  }
+
+  it("maps a server error during import to a runtime failure", async () => {
+    const result = await invoke(
+      ["publish", "-", "--idempotency-key", "pub-err-0001", "--json"],
+      {
+        stdin: openApi(),
+        environment: { REFERENCE_API_TOKEN: "reference-api-token-for-tests" },
+        fetchImplementation: async (input) => {
+          const p = new URL(String(input)).pathname;
+          if (p.endsWith("/publish/status")) {
+            return json({ error: { code: "PUBLISH_COMMAND_NOT_FOUND" } }, 404);
+          }
+          return json({ error: { code: "INTERNAL_ERROR" } }, 500);
+        },
+      },
+    );
+    expect(result.exitCode).not.toBe(CLI_EXIT_CODES.success);
+  });
+
+  it("maps a pending publish acknowledgement to an unknown outcome", async () => {
+    const result = await invoke(
+      ["publish", "-", "--idempotency-key", "pub-pending-0001", "--json"],
+      {
+        stdin: openApi(),
+        environment: { REFERENCE_API_TOKEN: "reference-api-token-for-tests" },
+        fetchImplementation: async (input) => {
+          const p = new URL(String(input)).pathname;
+          if (p.endsWith("/publish/status")) {
+            return json({ error: { code: "PUBLISH_COMMAND_NOT_FOUND" } }, 404);
+          }
+          if (p.endsWith("/contracts/import")) {
+            return json({ import: { id: "import_1" } }, 201);
+          }
+          return json(
+            { status: "pending", command: { state: "pending" } },
+            202,
+          );
+        },
+      },
+    );
+    expect(result.exitCode).toBe(CLI_EXIT_CODES.unknown);
+  });
+
+  it("rejects an invalid import acknowledgement body", async () => {
+    const result = await invoke(
+      ["publish", "-", "--idempotency-key", "pub-badbody-0001", "--json"],
+      {
+        stdin: openApi(),
+        environment: { REFERENCE_API_TOKEN: "reference-api-token-for-tests" },
+        fetchImplementation: async (input) => {
+          const p = new URL(String(input)).pathname;
+          if (p.endsWith("/publish/status")) {
+            return json({ error: { code: "PUBLISH_COMMAND_NOT_FOUND" } }, 404);
+          }
+          if (p.endsWith("/contracts/import")) {
+            return json({ unexpected: true }, 201);
+          }
+          return json({ error: { code: "INTERNAL_ERROR" } }, 500);
+        },
+      },
+    );
+    expect(result.exitCode).not.toBe(CLI_EXIT_CODES.success);
+  });
+
+  it("maps a timeline server error to a runtime failure", async () => {
+    const result = await invoke(
+      ["timeline", "--server", "https://reference.example", "--json"],
+      {
+        environment: { REFERENCE_API_TOKEN: "reference-api-token-for-tests" },
+        fetchImplementation: async () =>
+          json({ error: { code: "INTERNAL_ERROR" } }, 500),
+      },
+    );
+    expect(result.exitCode).not.toBe(CLI_EXIT_CODES.success);
+  });
+
+  it("rejects an unreadable ingest metadata file", async () => {
+    const result = await invoke(["ingest", "/does/not/exist.json", "--json"], {
+      environment: { REFERENCE_API_TOKEN: "reference-api-token-for-tests" },
+    });
+    expect(result.exitCode).not.toBe(CLI_EXIT_CODES.success);
+  });
+});
