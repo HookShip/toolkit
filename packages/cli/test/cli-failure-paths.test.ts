@@ -7,7 +7,7 @@ import { Readable, Writable } from "node:stream";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { CLI_EXIT_CODES, runCli } from "../src/index.js";
+import { CLI_EXIT_CODES, runCli, type CliDependencies } from "../src/index.js";
 
 class Capture extends Writable {
   #value = "";
@@ -156,12 +156,7 @@ describe("CLI dispatch and usage errors", () => {
 describe("serve and migrate commands", () => {
   async function runWith(
     argv: readonly string[],
-    deps: {
-      readonly migrateServer?: () => Promise<readonly string[]>;
-      readonly startServer?: (input: {
-        readonly environment: NodeJS.ProcessEnv;
-      }) => Promise<{ readonly address: string; close(): Promise<void> }>;
-    },
+    deps: Partial<Pick<CliDependencies, "migrateServer" | "startServer">>,
   ): Promise<{ exitCode: number; stdout: string; stderr: string }> {
     const stdout = new Capture();
     const stderr = new Capture();
@@ -215,12 +210,12 @@ describe("serve and migrate commands", () => {
   it("serves until an interrupt triggers a graceful shutdown", async () => {
     let closed = false;
     const promise = runWith(["serve", "--json"], {
-      startServer: async () => ({
+      startServer: (async () => ({
         address: "http://127.0.0.1:65535",
         close: async () => {
           closed = true;
         },
-      }),
+      })) as NonNullable<CliDependencies["startServer"]>,
     });
     await new Promise((resolve) => setTimeout(resolve, 50));
     process.emit("SIGTERM");
