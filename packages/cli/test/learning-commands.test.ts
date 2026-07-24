@@ -734,7 +734,7 @@ describe("migration-assess input validation", () => {
     { minimumRetention: { deliveryLogDays: -1 } },
     { minimumRetention: { unknownKey: 1 } },
     { observability: { deliveryLogs: "yes" } },
-    { apiKey: "sk_live_0123456789abcdefABCDEF" },
+    { apiKey: "not-a-target-policy-field" },
   ];
 
   it.each(malformedPolicies)(

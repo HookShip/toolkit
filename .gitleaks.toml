@@ -62,3 +62,11 @@ regexes = ['''whsec_[M]fKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw''']
 [[allowlists]]
 description = "Deliberately fake secret-shaped strings forming the credential-detection/redaction corpus; asserted to be detected and redacted, never real credentials."
 paths = ['''^packages/canonical-model/test/redaction\.test\.ts$''']
+
+[[allowlists]]
+description = "Deliberately fake Stripe-shaped values proving CLI target-policy and evidence-scope inputs reject embedded credentials; never real keys."
+targetRules = ["generic-api-key", "stripe-access-token"]
+condition = "AND"
+regexTarget = "match"
+paths = ['''^packages/cli/test/learning-commands\.test\.ts$''']
+regexes = ['''sk_live_0123456789abcdef''']
