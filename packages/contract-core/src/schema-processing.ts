@@ -6,75 +6,41 @@ import {
   type JsonObject,
   type JsonSchema,
   type JsonValue,
-  type SourceRange,
 } from "@webhook-portal/canonical-model";
 
-import type { ContractLimits } from "./api-types.js";
-import { DiagnosticCollector } from "./diagnostics.js";
 import {
   compareCodeUnits,
   joinPointer,
   sortJsonValue,
   stableStringify,
 } from "./json-utils.js";
-import { consumeLocalReference, type ReferenceBudget } from "./refs.js";
-const SCHEMA_MAP_KEYWORDS = new Set([
-  "$defs",
-  "definitions",
-  "dependentSchemas",
-  "patternProperties",
-  "properties",
-]);
-const SCHEMA_ARRAY_KEYWORDS = new Set([
-  "allOf",
-  "anyOf",
-  "oneOf",
-  "prefixItems",
-]);
-const SCHEMA_SINGLE_KEYWORDS = new Set([
-  "additionalItems",
-  "additionalProperties",
-  "contains",
-  "contentSchema",
-  "else",
-  "if",
-  "items",
-  "not",
-  "propertyNames",
-  "then",
-  "unevaluatedItems",
-  "unevaluatedProperties",
-]);
-export interface SchemaTarget {
-  readonly key: string;
-  readonly pointer: string;
-  readonly value: JsonSchema;
-}
+import { consumeLocalReference } from "./refs.js";
+import {
+  buildRootSchemaIndex,
+  createDocumentSchemaIndex,
+  type SchemaLocationIndex,
+  type SchemaProcessingContext,
+  type SchemaTarget,
+} from "./schema-index.js";
+import {
+  SCHEMA_ARRAY_KEYWORDS,
+  SCHEMA_MAP_KEYWORDS,
+  SCHEMA_SINGLE_KEYWORDS,
+} from "./schema-keywords.js";
 
-export interface SchemaLocationIndex {
-  readonly anchors: ReadonlyMap<string, SchemaTarget>;
-  readonly locations: ReadonlyMap<string, SchemaTarget>;
-}
-
-export interface SchemaIndexBuildContext {
-  readonly diagnostics: DiagnosticCollector;
-  readonly limits: ContractLimits;
-  readonly locations: Readonly<Record<string, SourceRange>>;
-  readonly workBudget: { exhausted: boolean; used: number };
-}
-
-export interface SchemaProcessingContext {
-  readonly defaultDialect: string;
-  readonly diagnostics: DiagnosticCollector;
-  readonly document: JsonObject;
-  readonly documentSchemaIndex?: SchemaLocationIndex;
-  readonly limits: ContractLimits;
-  readonly locations: Readonly<Record<string, SourceRange>>;
-  readonly referenceBudget: ReferenceBudget;
-  readonly rootSchemaIndexes: WeakMap<JsonObject, SchemaLocationIndex>;
-  readonly workBudget: { exhausted: boolean; used: number };
-}
-
+export {
+  countRegexConstraints,
+  countUniqueItemsConstraints,
+  stripRegexConstraintsForValidation,
+  stripUniqueItemsForValidation,
+} from "./schema-constraint-utils.js";
+export { createDocumentSchemaIndex } from "./schema-index.js";
+export type {
+  SchemaIndexBuildContext,
+  SchemaLocationIndex,
+  SchemaProcessingContext,
+  SchemaTarget,
+} from "./schema-index.js";
 export interface ProcessedSchema {
   readonly bytes: number;
   readonly nodes: number;
@@ -257,338 +223,6 @@ function reserveRawJsonValue(
   return true;
 }
 
-function documentSchemaRoots(
-  document: JsonObject,
-): readonly { readonly pointer: string; readonly schema: JsonSchema }[] {
-  const roots: { pointer: string; schema: JsonSchema }[] = [];
-  const addSchema = (value: JsonValue | undefined, pointer: string): void => {
-    if (isJsonSchema(value)) {
-      roots.push({ pointer, schema: value });
-    }
-  };
-  const addMessage = (value: JsonValue | undefined, pointer: string): void => {
-    if (!isJsonObject(value) || typeof value["$ref"] === "string") {
-      return;
-    }
-    if (Array.isArray(value["oneOf"])) {
-      value["oneOf"].forEach((message, index) => {
-        addMessage(message, joinPointer(joinPointer(pointer, "oneOf"), index));
-      });
-    }
-    addSchema(value["payload"], joinPointer(pointer, "payload"));
-  };
-  const addContent = (value: JsonValue | undefined, pointer: string): void => {
-    if (!isJsonObject(value)) {
-      return;
-    }
-    for (const mediaType of Object.keys(value).sort(compareCodeUnits)) {
-      const media = value[mediaType];
-      if (isJsonObject(media)) {
-        addSchema(
-          media["schema"],
-          joinPointer(joinPointer(pointer, mediaType), "schema"),
-        );
-      }
-    }
-  };
-  const addRequestBody = (
-    value: JsonValue | undefined,
-    pointer: string,
-  ): void => {
-    if (!isJsonObject(value) || typeof value["$ref"] === "string") {
-      return;
-    }
-    addContent(value["content"], joinPointer(pointer, "content"));
-  };
-
-  const components = document["components"];
-  if (isJsonObject(components)) {
-    const schemas = components["schemas"];
-    if (isJsonObject(schemas)) {
-      for (const name of Object.keys(schemas).sort(compareCodeUnits)) {
-        const schema = schemas[name];
-        addSchema(schema, joinPointer("/components/schemas", name));
-      }
-    }
-    const messages = components["messages"];
-    if (isJsonObject(messages)) {
-      for (const name of Object.keys(messages).sort(compareCodeUnits)) {
-        const message = messages[name];
-        addMessage(message, joinPointer("/components/messages", name));
-      }
-    }
-    const requestBodies = components["requestBodies"];
-    if (isJsonObject(requestBodies)) {
-      for (const name of Object.keys(requestBodies).sort(compareCodeUnits)) {
-        addRequestBody(
-          requestBodies[name],
-          joinPointer("/components/requestBodies", name),
-        );
-      }
-    }
-  }
-
-  const webhooks = document["webhooks"];
-  if (isJsonObject(webhooks)) {
-    for (const name of Object.keys(webhooks).sort(compareCodeUnits)) {
-      const path = webhooks[name];
-      if (!isJsonObject(path) || typeof path["$ref"] === "string") continue;
-      for (const method of [
-        "delete",
-        "get",
-        "head",
-        "options",
-        "patch",
-        "post",
-        "put",
-        "trace",
-      ]) {
-        const operation = path[method];
-        if (isJsonObject(operation)) {
-          addRequestBody(
-            operation["requestBody"],
-            joinPointer(
-              joinPointer(joinPointer("/webhooks", name), method),
-              "requestBody",
-            ),
-          );
-        }
-      }
-    }
-  }
-
-  const channels = document["channels"];
-  if (isJsonObject(channels)) {
-    for (const name of Object.keys(channels).sort(compareCodeUnits)) {
-      const channel = channels[name];
-      if (!isJsonObject(channel) || typeof channel["$ref"] === "string") {
-        continue;
-      }
-      for (const action of ["publish", "subscribe"]) {
-        const operation = channel[action];
-        if (isJsonObject(operation)) {
-          addMessage(
-            operation["message"],
-            joinPointer(
-              joinPointer(joinPointer("/channels", name), action),
-              "message",
-            ),
-          );
-        }
-      }
-      const messages = channel["messages"];
-      if (isJsonObject(messages)) {
-        for (const messageName of Object.keys(messages).sort(
-          compareCodeUnits,
-        )) {
-          addMessage(
-            messages[messageName],
-            joinPointer(
-              joinPointer(joinPointer("/channels", name), "messages"),
-              messageName,
-            ),
-          );
-        }
-      }
-    }
-  }
-  return roots;
-}
-
-interface MutableSchemaIndex {
-  readonly anchors: Map<string, SchemaTarget>;
-  readonly duplicateAnchors: Set<string>;
-  readonly locations: Map<string, SchemaTarget>;
-}
-
-function chargeIndexNode(
-  pointer: string,
-  context: SchemaIndexBuildContext,
-): boolean {
-  if (context.workBudget.exhausted) return false;
-  if (context.workBudget.used >= context.limits.maxValidationOperations) {
-    context.workBudget.exhausted = true;
-    context.diagnostics.add({
-      code: "SCHEMA_VALIDATION_BUDGET_EXCEEDED",
-      message: "Contract exhausted the shared schema indexing budget",
-      pointer,
-      severity: "error",
-      source: context.locations[pointer],
-    });
-    return false;
-  }
-  context.workBudget.used += 1;
-  return true;
-}
-
-function registerAnchor(
-  schema: JsonObject,
-  target: SchemaTarget,
-  index: MutableSchemaIndex,
-  context: SchemaIndexBuildContext,
-): void {
-  const anchor = schema["$anchor"];
-  if (
-    typeof anchor !== "string" ||
-    !/^[A-Za-z_][-A-Za-z0-9._]*$/u.test(anchor)
-  ) {
-    return;
-  }
-  const existing = index.anchors.get(anchor);
-  if (existing === undefined) {
-    index.anchors.set(anchor, target);
-    return;
-  }
-  const ordered = [existing, target].sort((left, right) =>
-    compareCodeUnits(left.pointer, right.pointer),
-  );
-  index.anchors.set(anchor, ordered[0] as SchemaTarget);
-  if (!index.duplicateAnchors.has(anchor)) {
-    index.duplicateAnchors.add(anchor);
-    context.diagnostics.add({
-      code: "SCHEMA_ANCHOR_DUPLICATE",
-      details: {
-        anchor,
-        locations: ordered.map(({ pointer }) => pointer),
-      },
-      message: `Duplicate JSON Schema $anchor "${anchor}"`,
-      pointer: ordered[1]?.pointer ?? target.pointer,
-      severity: "error",
-      source: context.locations[ordered[1]?.pointer ?? target.pointer],
-    });
-  }
-}
-
-function indexSchemaTree(
-  schema: JsonSchema,
-  indexPointer: string,
-  sourcePointer: string,
-  namespace: "document" | "schema",
-  index: MutableSchemaIndex,
-  visited: Set<object>,
-  context: SchemaIndexBuildContext,
-): void {
-  if (!chargeIndexNode(sourcePointer, context)) return;
-  const target: SchemaTarget = {
-    key: `${namespace}:${sourcePointer}`,
-    pointer: sourcePointer,
-    value: schema,
-  };
-  index.locations.set(indexPointer, target);
-  if (typeof schema === "boolean" || visited.has(schema)) {
-    return;
-  }
-  visited.add(schema);
-  registerAnchor(schema, target, index, context);
-  for (const key of SCHEMA_MAP_KEYWORDS) {
-    const map = schema[key];
-    if (isJsonObject(map)) {
-      for (const name of Object.keys(map).sort(compareCodeUnits)) {
-        const child = map[name];
-        if (isJsonSchema(child)) {
-          indexSchemaTree(
-            child,
-            joinPointer(joinPointer(indexPointer, key), name),
-            joinPointer(joinPointer(sourcePointer, key), name),
-            namespace,
-            index,
-            visited,
-            context,
-          );
-        }
-      }
-    }
-  }
-  for (const key of [...SCHEMA_ARRAY_KEYWORDS, "items"]) {
-    const values = schema[key];
-    if (Array.isArray(values)) {
-      values.forEach((child, childIndex) => {
-        if (isJsonSchema(child)) {
-          indexSchemaTree(
-            child,
-            joinPointer(joinPointer(indexPointer, key), childIndex),
-            joinPointer(joinPointer(sourcePointer, key), childIndex),
-            namespace,
-            index,
-            visited,
-            context,
-          );
-        }
-      });
-    }
-  }
-  for (const key of SCHEMA_SINGLE_KEYWORDS) {
-    const child = schema[key];
-    if (isJsonSchema(child)) {
-      indexSchemaTree(
-        child,
-        joinPointer(indexPointer, key),
-        joinPointer(sourcePointer, key),
-        namespace,
-        index,
-        visited,
-        context,
-      );
-    }
-  }
-}
-
-export function createDocumentSchemaIndex(
-  document: JsonObject,
-  context: SchemaIndexBuildContext,
-): SchemaLocationIndex {
-  const index: MutableSchemaIndex = {
-    anchors: new Map(),
-    duplicateAnchors: new Set(),
-    locations: new Map(),
-  };
-  for (const root of [...documentSchemaRoots(document)].sort((left, right) =>
-    compareCodeUnits(left.pointer, right.pointer),
-  )) {
-    if (context.workBudget.exhausted) break;
-    indexSchemaTree(
-      root.schema,
-      root.pointer,
-      root.pointer,
-      "document",
-      index,
-      new Set(),
-      context,
-    );
-  }
-  return { anchors: index.anchors, locations: index.locations };
-}
-
-function buildRootSchemaIndex(
-  schema: JsonSchema,
-  sourcePointer: string,
-  context: SchemaProcessingContext,
-): SchemaLocationIndex {
-  if (isJsonObject(schema)) {
-    const cached = context.rootSchemaIndexes.get(schema);
-    if (cached !== undefined) return cached;
-  }
-  const index: MutableSchemaIndex = {
-    anchors: new Map(),
-    duplicateAnchors: new Set(),
-    locations: new Map(),
-  };
-  indexSchemaTree(
-    schema,
-    "",
-    sourcePointer,
-    "schema",
-    index,
-    new Set(),
-    context,
-  );
-  const result = { anchors: index.anchors, locations: index.locations };
-  if (isJsonObject(schema)) {
-    context.rootSchemaIndexes.set(schema, result);
-  }
-  return result;
-}
-
 function resolveLocalTarget(
   reference: string,
   state: ResolveState,
@@ -752,103 +386,82 @@ function resolveSchemaNode(
     return undefined;
   }
   if (typeof reference === "string") {
-    if (!reference.startsWith("#")) {
-      return addError(
-        state,
-        reference.includes(":")
-          ? "SCHEMA_EXTERNAL_REF_UNSUPPORTED"
-          : "SCHEMA_RELATIVE_REF_UNSUPPORTED",
-        `Only local schema references are supported; received "${reference}"`,
-        joinPointer(sourcePointer, "$ref"),
-      );
-    }
-    if (
-      !consumeLocalReference(
-        state.context.referenceBudget,
-        state.context.limits,
-        state.context.diagnostics,
-        state.context.locations,
-        `schema:${sourcePointer}:${reference}`,
-        joinPointer(sourcePointer, "$ref"),
-      )
-    ) {
-      return undefined;
-    }
-    const target = resolveLocalTarget(reference, state);
-    if (target === undefined) {
-      return addError(
-        state,
-        "SCHEMA_REF_NOT_FOUND",
-        `Local schema reference "${reference}" does not resolve`,
-        joinPointer(sourcePointer, "$ref"),
-      );
-    }
-    const siblings = draft07
-      ? []
-      : Object.keys(schema).filter((key) => key !== "$ref");
-    const existingPointer = stack.get(target.key);
-    if (existingPointer !== undefined) {
-      if (siblings.length === 0) {
-        const result = { $ref: pointerRef(existingPointer) };
-        return reserveRawJsonValue(result, sourcePointer, state)
-          ? result
-          : undefined;
-      }
-      const siblingObject: Record<string, JsonValue> = {};
-      for (const key of Object.keys(schema).sort(compareCodeUnits)) {
-        const item = schema[key];
-        if (key !== "$ref" && item !== undefined) {
-          siblingObject[key] = item;
-        }
-      }
-      const siblingPointer = joinPointer(
-        joinPointer(canonicalPointer, "allOf"),
-        1,
-      );
-      const resolvedSiblings = resolveSchemaNode(
-        siblingObject,
-        sourcePointer,
-        siblingPointer,
-        state,
-        stack,
-        depth + 1,
-        dialect,
-      );
-      if (resolvedSiblings === undefined) return undefined;
-      const recursiveReference = { $ref: pointerRef(existingPointer) };
-      if (
-        !reserveRawJsonValue(recursiveReference, sourcePointer, state) ||
-        !reserveSchemaOutput(state, sourcePointer, 2, 13)
-      ) {
-        return undefined;
-      }
-      return {
-        allOf: [recursiveReference, resolvedSiblings],
-      };
-    }
-
-    const targetCanonicalPointer =
-      siblings.length === 0
-        ? canonicalPointer
-        : joinPointer(joinPointer(canonicalPointer, "allOf"), 0);
-    const nextStack = new Map(stack);
-    nextStack.set(target.key, targetCanonicalPointer);
-    const resolvedTarget = resolveSchemaNode(
-      target.value,
-      target.pointer,
-      targetCanonicalPointer,
+    return resolveReferenceNode(
+      schema,
+      sourcePointer,
+      canonicalPointer,
       state,
-      nextStack,
-      depth + 1,
+      stack,
+      depth,
       dialect,
+      draft07,
+      reference,
     );
-    if (resolvedTarget === undefined) {
-      return undefined;
-    }
-    if (siblings.length === 0) {
-      return resolvedTarget;
-    }
+  }
+  return resolveObjectNode(
+    schema,
+    sourcePointer,
+    canonicalPointer,
+    state,
+    stack,
+    depth,
+    dialect,
+  );
+}
 
+function resolveReferenceNode(
+  schema: JsonObject,
+  sourcePointer: string,
+  canonicalPointer: string,
+  state: ResolveState,
+  stack: ReadonlyMap<string, string>,
+  depth: number,
+  dialect: string,
+  draft07: boolean,
+  reference: string,
+): JsonSchema | undefined {
+  if (!reference.startsWith("#")) {
+    return addError(
+      state,
+      reference.includes(":")
+        ? "SCHEMA_EXTERNAL_REF_UNSUPPORTED"
+        : "SCHEMA_RELATIVE_REF_UNSUPPORTED",
+      `Only local schema references are supported; received "${reference}"`,
+      joinPointer(sourcePointer, "$ref"),
+    );
+  }
+  if (
+    !consumeLocalReference(
+      state.context.referenceBudget,
+      state.context.limits,
+      state.context.diagnostics,
+      state.context.locations,
+      `schema:${sourcePointer}:${reference}`,
+      joinPointer(sourcePointer, "$ref"),
+    )
+  ) {
+    return undefined;
+  }
+  const target = resolveLocalTarget(reference, state);
+  if (target === undefined) {
+    return addError(
+      state,
+      "SCHEMA_REF_NOT_FOUND",
+      `Local schema reference "${reference}" does not resolve`,
+      joinPointer(sourcePointer, "$ref"),
+    );
+  }
+  const siblings = draft07
+    ? []
+    : Object.keys(schema).filter((key) => key !== "$ref");
+  const existingPointer = stack.get(target.key);
+  if (existingPointer !== undefined) {
+    if (siblings.length === 0) {
+      const result = { $ref: pointerRef(existingPointer) };
+      return reserveRawJsonValue(result, sourcePointer, state)
+        ? result
+        : undefined;
+    }
     const siblingObject: Record<string, JsonValue> = {};
     for (const key of Object.keys(schema).sort(compareCodeUnits)) {
       const item = schema[key];
@@ -856,24 +469,88 @@ function resolveSchemaNode(
         siblingObject[key] = item;
       }
     }
+    const siblingPointer = joinPointer(
+      joinPointer(canonicalPointer, "allOf"),
+      1,
+    );
     const resolvedSiblings = resolveSchemaNode(
       siblingObject,
       sourcePointer,
-      joinPointer(joinPointer(canonicalPointer, "allOf"), 1),
+      siblingPointer,
       state,
       stack,
       depth + 1,
       dialect,
     );
+    if (resolvedSiblings === undefined) return undefined;
+    const recursiveReference = { $ref: pointerRef(existingPointer) };
     if (
-      resolvedSiblings === undefined ||
+      !reserveRawJsonValue(recursiveReference, sourcePointer, state) ||
       !reserveSchemaOutput(state, sourcePointer, 2, 13)
     ) {
       return undefined;
     }
-    return { allOf: [resolvedTarget, resolvedSiblings] };
+    return {
+      allOf: [recursiveReference, resolvedSiblings],
+    };
   }
 
+  const targetCanonicalPointer =
+    siblings.length === 0
+      ? canonicalPointer
+      : joinPointer(joinPointer(canonicalPointer, "allOf"), 0);
+  const nextStack = new Map(stack);
+  nextStack.set(target.key, targetCanonicalPointer);
+  const resolvedTarget = resolveSchemaNode(
+    target.value,
+    target.pointer,
+    targetCanonicalPointer,
+    state,
+    nextStack,
+    depth + 1,
+    dialect,
+  );
+  if (resolvedTarget === undefined) {
+    return undefined;
+  }
+  if (siblings.length === 0) {
+    return resolvedTarget;
+  }
+
+  const siblingObject: Record<string, JsonValue> = {};
+  for (const key of Object.keys(schema).sort(compareCodeUnits)) {
+    const item = schema[key];
+    if (key !== "$ref" && item !== undefined) {
+      siblingObject[key] = item;
+    }
+  }
+  const resolvedSiblings = resolveSchemaNode(
+    siblingObject,
+    sourcePointer,
+    joinPointer(joinPointer(canonicalPointer, "allOf"), 1),
+    state,
+    stack,
+    depth + 1,
+    dialect,
+  );
+  if (
+    resolvedSiblings === undefined ||
+    !reserveSchemaOutput(state, sourcePointer, 2, 13)
+  ) {
+    return undefined;
+  }
+  return { allOf: [resolvedTarget, resolvedSiblings] };
+}
+
+function resolveObjectNode(
+  schema: JsonObject,
+  sourcePointer: string,
+  canonicalPointer: string,
+  state: ResolveState,
+  stack: ReadonlyMap<string, string>,
+  depth: number,
+  dialect: string,
+): JsonSchema | undefined {
   const result: Record<string, JsonValue> = {};
   if (!reserveSchemaOutput(state, sourcePointer, 1, 2)) {
     return undefined;
@@ -1106,171 +783,3 @@ export function processJsonSchema(
  * Removes user-controlled regex assertions before AJV compilation. The
  * returned schema is intentionally broader and is used only for examples.
  */
-export function stripRegexConstraintsForValidation(
-  schema: JsonSchema,
-): JsonSchema {
-  if (typeof schema === "boolean") {
-    return schema;
-  }
-  const result: Record<string, JsonValue> = {};
-  let removedPatternProperties = false;
-  for (const key of Object.keys(schema).sort(compareCodeUnits)) {
-    const item = schema[key];
-    if (item === undefined || key === "pattern") {
-      continue;
-    }
-    if (key === "patternProperties") {
-      removedPatternProperties = true;
-      continue;
-    }
-    if (SCHEMA_MAP_KEYWORDS.has(key) && isJsonObject(item)) {
-      const map: Record<string, JsonValue> = {};
-      for (const name of Object.keys(item).sort(compareCodeUnits)) {
-        const child = item[name];
-        if (isJsonSchema(child)) {
-          map[name] = stripRegexConstraintsForValidation(child);
-        }
-      }
-      result[key] = map;
-    } else if (
-      (SCHEMA_ARRAY_KEYWORDS.has(key) || key === "items") &&
-      Array.isArray(item)
-    ) {
-      result[key] = item.map((child) =>
-        isJsonSchema(child)
-          ? stripRegexConstraintsForValidation(child)
-          : sortJsonValue(child),
-      );
-    } else if (SCHEMA_SINGLE_KEYWORDS.has(key) && isJsonSchema(item)) {
-      result[key] = stripRegexConstraintsForValidation(item);
-    } else {
-      result[key] = sortJsonValue(item);
-    }
-  }
-  if (removedPatternProperties) {
-    result["additionalProperties"] = true;
-    result["unevaluatedProperties"] = true;
-  }
-  return result;
-}
-
-/**
- * Removes uniqueItems before validating examples when its quadratic worst case
- * would exceed the synchronous validation budget.
- */
-export function stripUniqueItemsForValidation(schema: JsonSchema): JsonSchema {
-  if (typeof schema === "boolean") {
-    return schema;
-  }
-  const result: Record<string, JsonValue> = {};
-  for (const key of Object.keys(schema).sort(compareCodeUnits)) {
-    const item = schema[key];
-    if (item === undefined || (key === "uniqueItems" && item === true)) {
-      continue;
-    }
-    if (SCHEMA_MAP_KEYWORDS.has(key) && isJsonObject(item)) {
-      const map: Record<string, JsonValue> = {};
-      for (const name of Object.keys(item).sort(compareCodeUnits)) {
-        const child = item[name];
-        if (isJsonSchema(child)) {
-          map[name] = stripUniqueItemsForValidation(child);
-        }
-      }
-      result[key] = map;
-    } else if (
-      (SCHEMA_ARRAY_KEYWORDS.has(key) || key === "items") &&
-      Array.isArray(item)
-    ) {
-      result[key] = item.map((child) =>
-        isJsonSchema(child)
-          ? stripUniqueItemsForValidation(child)
-          : sortJsonValue(child),
-      );
-    } else if (SCHEMA_SINGLE_KEYWORDS.has(key) && isJsonSchema(item)) {
-      result[key] = stripUniqueItemsForValidation(item);
-    } else {
-      result[key] = sortJsonValue(item);
-    }
-  }
-  return result;
-}
-
-export function countRegexConstraints(schema: JsonSchema): number {
-  if (typeof schema === "boolean") {
-    return 0;
-  }
-  let count = typeof schema["pattern"] === "string" ? 1 : 0;
-  const patternProperties = schema["patternProperties"];
-  if (isJsonObject(patternProperties)) {
-    count += Object.keys(patternProperties).length;
-    for (const child of Object.values(patternProperties)) {
-      if (isJsonSchema(child)) {
-        count += countRegexConstraints(child);
-      }
-    }
-  }
-  for (const key of SCHEMA_MAP_KEYWORDS) {
-    if (key === "patternProperties") {
-      continue;
-    }
-    const map = schema[key];
-    if (isJsonObject(map)) {
-      for (const child of Object.values(map)) {
-        if (isJsonSchema(child)) {
-          count += countRegexConstraints(child);
-        }
-      }
-    }
-  }
-  for (const key of [...SCHEMA_ARRAY_KEYWORDS, "items"]) {
-    const values = schema[key];
-    if (Array.isArray(values)) {
-      for (const child of values) {
-        if (isJsonSchema(child)) {
-          count += countRegexConstraints(child);
-        }
-      }
-    }
-  }
-  for (const key of SCHEMA_SINGLE_KEYWORDS) {
-    const child = schema[key];
-    if (isJsonSchema(child)) {
-      count += countRegexConstraints(child);
-    }
-  }
-  return count;
-}
-
-export function countUniqueItemsConstraints(schema: JsonSchema): number {
-  if (typeof schema === "boolean") {
-    return 0;
-  }
-  let count = schema["uniqueItems"] === true ? 1 : 0;
-  for (const key of SCHEMA_MAP_KEYWORDS) {
-    const map = schema[key];
-    if (isJsonObject(map)) {
-      for (const child of Object.values(map)) {
-        if (isJsonSchema(child)) {
-          count += countUniqueItemsConstraints(child);
-        }
-      }
-    }
-  }
-  for (const key of [...SCHEMA_ARRAY_KEYWORDS, "items"]) {
-    const values = schema[key];
-    if (Array.isArray(values)) {
-      for (const child of values) {
-        if (isJsonSchema(child)) {
-          count += countUniqueItemsConstraints(child);
-        }
-      }
-    }
-  }
-  for (const key of SCHEMA_SINGLE_KEYWORDS) {
-    const child = schema[key];
-    if (isJsonSchema(child)) {
-      count += countUniqueItemsConstraints(child);
-    }
-  }
-  return count;
-}
