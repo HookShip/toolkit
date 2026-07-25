@@ -43,7 +43,8 @@ Compose/psql path: the advisory-lock, migration-state guard, and checksum
 bookkeeping are hand-maintained boilerplate, while the DDL body, version, and
 recorded checksum are copied verbatim from the manifest. A change to the schema
 starts in the manifest and is mirrored into the matching `.sql` file;
-`packages/cli/test/reference-migration-parity.test.ts` fails if the two drift.
+`packages/reference-server-core/test/reference-migration-parity.test.ts` fails
+if the two drift.
 
 Some pre-release changes are intentionally breaking — for example the payload
 storage-identity change enforced by migration `011`, which rejects legacy bucket

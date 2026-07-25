@@ -19,7 +19,9 @@ the reference server normalize observations through that allowlist and reject
 unknown fields, raw payloads, arbitrary headers, and credential-like values by
 default. See [`packages/adapter-sdk`](../../packages/adapter-sdk) and the
 reference-server implementation under
-[`packages/cli/src/reference-server`](../../packages/cli/src/reference-server).
+[`packages/reference-server-core/src`](../../packages/reference-server-core/src)
+(extracted from the CLI per
+[ADR-0010](adr-0010-reference-server-core-package.md)).
 
 Optional payload retention is a separate explicit setting with a bounded TTL. It
 is not required for contracts, endpoints, subscriptions, signed tests, metadata

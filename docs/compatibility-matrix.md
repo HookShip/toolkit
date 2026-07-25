@@ -56,18 +56,19 @@ registry before anything that depends on it. The order is derived
 deterministically by [`scripts/release.mjs`](../scripts/release.mjs) and is:
 
 1. `@webhook-portal/canonical-model`
-2. `@webhook-portal/extension-sdk`
-3. `@webhook-portal/portal-components`
-4. `@webhook-portal/signing`
-5. `@webhook-portal/support-evidence`
-6. `@webhook-portal/adapter-sdk`
-7. `@webhook-portal/contract-core`
-8. `@webhook-portal/extension-conformance`
-9. `@webhook-portal/adapter-conformance`
-10. `@webhook-portal/adapter-generic-http`
-11. `@webhook-portal/compatibility-report`
+2. `@webhook-portal/portal-components`
+3. `@webhook-portal/signing`
+4. `@webhook-portal/adapter-sdk`
+5. `@webhook-portal/contract-core`
+6. `@webhook-portal/extension-sdk`
+7. `@webhook-portal/support-evidence`
+8. `@webhook-portal/adapter-conformance`
+9. `@webhook-portal/adapter-generic-http`
+10. `@webhook-portal/compatibility-report`
+11. `@webhook-portal/extension-conformance`
 12. `@webhook-portal/migration-assessment`
-13. `@webhook-portal/cli`
+13. `@webhook-portal/reference-server-core`
+14. `@webhook-portal/cli`
 
 The order is regenerated from the manifest on every run, so it stays correct if
 dependencies change. See [`release-policy.md`](release-policy.md) for the full
@@ -75,9 +76,16 @@ release process.
 
 ## Reference server
 
+The reference server runtime ships as the public
+[`@webhook-portal/reference-server-core`](../packages/reference-server-core)
+package (Fastify, Postgres, and MinIO live here, not in the CLI).
 [`apps/reference-server`](../apps/reference-server) is a private Apache-2.0
-packaging wrapper around `@webhook-portal/cli/reference-server`. It is not part
-of the published cohort and has no npm release version.
+process/migration wrapper that depends directly on that package; it is not part
+of the published cohort and has no npm release version. The CLI keeps the
+runtime as an **optional peer** and exposes a deprecated
+`@webhook-portal/cli/reference-server` compatibility re-export that resolves
+only when the core package is also installed, so a CLI-only install never pulls
+Fastify/PG/MinIO.
 
 ## Provenance
 

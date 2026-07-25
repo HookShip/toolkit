@@ -51,6 +51,42 @@ const availabilityClaim =
   /\b\d{1,3}(?:\.\d+)?\s*%\s*(?:uptime|availability|sla)/i;
 const gaClaim = /\bgenerally available\b/i;
 
+// Inline-code references to concrete workspace source files must resolve, so a
+// moved, renamed, or deleted symbol cannot leave a stale path behind in prose
+// (Markdown link targets are validated separately by checkLinks). Generated and
+// installed trees are excluded because they do not exist until a build/install.
+const workspaceFileReference =
+  /^(?:packages|apps|scripts|infra|examples|extensions|release|docs)\/[A-Za-z0-9._/-]+\.(?:ts|mjs|cjs|js|sql|sh|json|ya?ml)$/;
+const generatedPathSegment =
+  /(?:^|\/)(?:dist|node_modules|coverage|\.turbo|\.release-work|\.pack-smoke-work)(?:\/|$)/;
+const inlineCodeSpan = /`([^`\n]+)`/g;
+
+// Critical commands, environment variables, and ports the docs depend on. Each
+// anchor must still be present in the cited source of truth, so renaming one in
+// code fails this check until the docs are updated in step.
+export const criticalCodeAnchors = [
+  {
+    token: "3210",
+    file: "packages/reference-server-core/src/types.ts",
+    label: "reference server default port",
+  },
+  {
+    token: "REFERENCE_API_TOKEN",
+    file: "packages/reference-server-core/src/runtime.ts",
+    label: "reference API token environment variable",
+  },
+  {
+    token: "DATABASE_URL",
+    file: "packages/reference-server-core/src/runtime.ts",
+    label: "reference database URL environment variable",
+  },
+  {
+    token: "test:integration:reference",
+    file: "package.json",
+    label: "reference integration npm script",
+  },
+];
+
 // Reserved documentation domains that are never real endpoints.
 const allowedExampleHosts =
   /(?:^|[/@.])(?:example\.(?:com|org|net)|example-[a-z-]+\.internal|localhost|127\.0\.0\.1)(?:$|[/:])/i;
@@ -132,6 +168,50 @@ export function checkNoInventedReferences(relativeFile, text) {
   return failures;
 }
 
+export function checkWorkspacePathReferences(relativeFile, text) {
+  const failures = [];
+  const seen = new Set();
+  for (const match of text.matchAll(inlineCodeSpan)) {
+    const candidate = match[1].trim();
+    if (seen.has(candidate)) {
+      continue;
+    }
+    if (
+      !workspaceFileReference.test(candidate) ||
+      generatedPathSegment.test(candidate)
+    ) {
+      continue;
+    }
+    seen.add(candidate);
+    if (!existsSync(path.join(root, candidate))) {
+      failures.push(
+        `${relativeFile}: inline reference to missing workspace file \`${candidate}\` (moved, renamed, or deleted?)`,
+      );
+    }
+  }
+  return failures;
+}
+
+export async function checkCriticalAnchors() {
+  const failures = [];
+  for (const anchor of criticalCodeAnchors) {
+    const absolute = path.join(root, anchor.file);
+    if (!existsSync(absolute)) {
+      failures.push(
+        `critical ${anchor.label} anchor file is missing: ${anchor.file}`,
+      );
+      continue;
+    }
+    const source = await readFile(absolute, "utf8");
+    if (!source.includes(anchor.token)) {
+      failures.push(
+        `critical ${anchor.label} "${anchor.token}" is no longer present in ${anchor.file}; documentation may be stale`,
+      );
+    }
+  }
+  return failures;
+}
+
 export function checkNavigation(corpus) {
   const failures = [];
   for (const target of requiredNavigation) {
@@ -156,8 +236,10 @@ export async function checkDocs() {
     corpus += `\n${text}`;
     failures.push(...checkLinks(file, text));
     failures.push(...checkNoInventedReferences(file, text));
+    failures.push(...checkWorkspacePathReferences(file, text));
   }
   failures.push(...checkNavigation(corpus));
+  failures.push(...(await checkCriticalAnchors()));
   return failures.sort();
 }
 

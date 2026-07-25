@@ -23,6 +23,7 @@ public toolkit.
 | [ADR-0007](adr-0007-declarative-signed-extensions-no-arbitrary-code-execution.md) | Declarative, signed extensions with no arbitrary code execution | Accepted |
 | [ADR-0008](adr-0008-release-ownership-and-automation.md)                          | Release ownership and automation                                | Accepted |
 | [ADR-0009](adr-0009-single-source-canonical-json.md)                              | Single-source canonical JSON serialization                      | Accepted |
+| [ADR-0010](adr-0010-reference-server-core-package.md)                             | Reference server runtime as its own package                     | Accepted |
 
 The numbering preserves the decisions inherited by this history-filtered public
 extraction. Missing numbers refer to decisions that are not part of this

@@ -53,6 +53,40 @@ test("checkLinks flags broken relative links but ignores external and code", () 
   assert.deepEqual(checkLinks("docs/x.md", "```\n[x](./nope.md)\n```"), []);
 });
 
+test("checkWorkspacePathReferences flags moved or renamed source files", async () => {
+  const { checkWorkspacePathReferences } = await import("./check-docs.mjs");
+  // A real, present workspace file passes.
+  assert.deepEqual(
+    checkWorkspacePathReferences("d.md", "see `scripts/check-docs.mjs`"),
+    [],
+  );
+  // A moved/renamed source file is flagged.
+  const moved = checkWorkspacePathReferences(
+    "d.md",
+    "see `packages/cli/src/reference-server/server.ts`",
+  );
+  assert.equal(moved.length, 1);
+  assert.match(moved[0], /missing workspace file/);
+  // Generated/installed trees are ignored (they do not exist until built).
+  assert.deepEqual(
+    checkWorkspacePathReferences("d.md", "run `packages/cli/dist/bin.js`"),
+    [],
+  );
+  // Non-path prose and globs are ignored.
+  assert.deepEqual(
+    checkWorkspacePathReferences(
+      "d.md",
+      "`packages/*/package.json` and `pnpm build`",
+    ),
+    [],
+  );
+});
+
+test("checkCriticalAnchors confirms critical commands, env vars, and ports exist", async () => {
+  const { checkCriticalAnchors } = await import("./check-docs.mjs");
+  assert.deepEqual(await checkCriticalAnchors(), []);
+});
+
 test("checkNoInventedReferences flags invented repos, contacts, SLAs, and GA claims", () => {
   assert.ok(
     checkNoInventedReferences(

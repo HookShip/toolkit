@@ -39,7 +39,7 @@ placement, source-of-truth, and release policies.
 
 ## Packages
 
-All 13 packages are Apache-2.0, public-package candidates, and part of the
+All 14 packages are Apache-2.0, public-package candidates, and part of the
 coordinated release manifest.
 
 | Package                                                                   | Purpose                                                                                          |
@@ -56,10 +56,11 @@ coordinated release manifest.
 | [`@webhook-portal/migration-assessment`](packages/migration-assessment)   | Credential-free migration inventory and target-readiness assessment.                             |
 | [`@webhook-portal/support-evidence`](packages/support-evidence)           | Metadata-only support evidence bundles with optional signatures.                                 |
 | [`@webhook-portal/portal-components`](packages/portal-components)         | Accessible, server-first React components for webhook portals.                                   |
-| [`@webhook-portal/cli`](packages/cli)                                     | CLI plus the importable single-team reference-server implementation.                             |
+| [`@webhook-portal/reference-server-core`](packages/reference-server-core) | Importable single-team reference-server runtime (Fastify, Postgres, MinIO).                      |
+| [`@webhook-portal/cli`](packages/cli)                                     | Command-line interface for contracts, signing, releases, and reference-server serve/migrate.     |
 
 [`apps/reference-server`](apps/reference-server) is a private packaging wrapper
-around `@webhook-portal/cli/reference-server`. It is Apache-2.0 but is not an
+around `@webhook-portal/reference-server-core`. It is Apache-2.0 but is not an
 npm release package.
 
 No package has been published yet. Source versions are `0.1.0` release
@@ -87,7 +88,7 @@ build.
 Additional validation:
 
 ```sh
-pnpm test:coverage  # all 13 packages plus the reference app wrapper
+pnpm test:coverage  # all 14 packages plus the reference app wrapper
 pnpm smoke          # in-memory end-to-end CLI/reference workflow
 pnpm pack:smoke     # pack, inspect, install, import, and invoke all packages
 pnpm check:compose  # static reference Compose and production-layout checks

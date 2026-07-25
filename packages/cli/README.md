@@ -190,9 +190,14 @@ your own loopback receiver).
 
 ## Running the reference server from this binary
 
-`serve` and `migrate` run the same open reference-server implementation packaged
-separately as [`apps/reference-server`](../../apps/reference-server), using the
-environment variables documented there (`DATABASE_URL`, `REFERENCE_MASTER_KEY`,
+`serve` and `migrate` run the reference-server runtime published as the optional
+peer package [`@webhook-portal/reference-server-core`](../reference-server-core)
+(also packaged as the private app
+[`apps/reference-server`](../../apps/reference-server)). The runtime is loaded
+lazily, so a CLI-only install never pulls Fastify/PG/MinIO; if the optional
+package is absent these two commands fail closed with
+`REFERENCE_SERVER_RUNTIME_MISSING`. They use the environment variables
+documented there (`DATABASE_URL`, `REFERENCE_MASTER_KEY`,
 `REFERENCE_INGEST_CREDENTIAL_ID`, `REFERENCE_INGEST_SECRET`,
 `REFERENCE_API_TOKEN`/`REFERENCE_API_TOKEN_FILE`, distinct non-secret
 22-character lowercase hexadecimal
