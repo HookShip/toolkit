@@ -36,7 +36,7 @@
     "test:hygiene": "node --test scripts/test-hygiene.test.mjs",
     "test:integration:reference": "pnpm --filter @webhook-portal/reference-server-core test:integration",
     "test:live:reference": "docker compose --profile integration --env-file infra/.env -f infra/docker-compose.yml run --rm --build integration-tests",
-    "test:required": "pnpm test:hygiene && turbo run test && pnpm test:extensions",
+    "test:required": "pnpm test:hygiene && turbo run test --concurrency=4 && pnpm test:extensions",
     "test:verdaccio": "node scripts/verdaccio-harness.mjs",
     "typecheck": "turbo run typecheck",
     "test:coverage:unit": "node scripts/test-coverage.mjs"
