@@ -21,18 +21,10 @@ export const maximumSourceLines = 800;
  * new entries: a genuinely new oversized file is a ratchet failure.
  */
 export const allowlist = new Map([
-  ["packages/adapter-conformance/src/harness.ts", 1365],
-  ["packages/adapter-generic-http/src/adapter.ts", 2178],
-  ["packages/adapter-sdk/src/metadata.ts", 1102],
   // Cohesive structural diff engine: a single semantic comparison whose phases
   // share one traversal; kept whole by design (its functions are all <=150).
+  // This is the sole permitted production-source exception to the 800-line cap.
   ["packages/contract-core/src/diff.ts", 1762],
-  ["packages/contract-core/src/fixtures.ts", 1030],
-  ["packages/extension-sdk/src/bundle.ts", 840],
-  ["packages/extension-sdk/src/manifest.ts", 1017],
-  ["packages/migration-assessment/src/assessment.ts", 860],
-  ["packages/migration-assessment/src/import.ts", 1085],
-  ["packages/support-evidence/src/fail-closed-validation.ts", 840],
 ]);
 
 const sourceExtensions = new Set([
