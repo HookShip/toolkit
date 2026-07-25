@@ -75,8 +75,8 @@ export function asyncApiExamples(
   );
 }
 
-export function addAsyncMessage(
-  messageValue: JsonValue,
+function addResolvedAsyncMessage(
+  message: JsonObject,
   messagePointer: string,
   fallbackName: string,
   sourceIdentity: string,
@@ -84,80 +84,10 @@ export function addAsyncMessage(
   document: JsonObject,
   events: ExtractedEvent[],
   context: ExtractionContext,
+  schemaPointer: string,
+  resolvedSchema: Exclude<ReturnType<typeof resolveSchema>, undefined>,
+  declaredSchemaDialect: string,
 ): void {
-  if (context.outputBudget.exhausted) return;
-  const message = resolveObject(
-    messageValue,
-    messagePointer,
-    context,
-    "asyncapi-message",
-  );
-  if (message === undefined) {
-    return;
-  }
-
-  const asyncApiVersion = document["asyncapi"] === "2.6.0" ? "2.6.0" : "3.0.0";
-  const declaredSchemaDialect = resolveAsyncApiSchemaDialect(
-    message["schemaFormat"] ?? document["defaultSchemaFormat"],
-    asyncApiVersion,
-  );
-  if (declaredSchemaDialect === undefined) {
-    addAt(context, {
-      code: "ASYNCAPI_SCHEMA_FORMAT_UNSUPPORTED",
-      message: `AsyncAPI message uses unsupported schema format "${String(message["schemaFormat"])}"`,
-      pointer: joinPointer(messagePointer, "schemaFormat"),
-      severity: "error",
-    });
-    return;
-  }
-  const contentType =
-    asString(message["contentType"]) ??
-    asString(document["defaultContentType"]);
-  if (contentType !== undefined && !isJsonMediaType(contentType)) {
-    addAt(context, {
-      code: "ASYNCAPI_MEDIA_TYPE_UNSUPPORTED",
-      message: `AsyncAPI message media type "${contentType}" is not JSON`,
-      pointer:
-        asString(message["contentType"]) === undefined
-          ? "/defaultContentType"
-          : joinPointer(messagePointer, "contentType"),
-      severity: "error",
-    });
-    return;
-  }
-
-  if (Array.isArray(message["oneOf"])) {
-    message["oneOf"].forEach((item, index) => {
-      addAsyncMessage(
-        item,
-        joinPointer(joinPointer(messagePointer, "oneOf"), index),
-        `${fallbackName}.${index + 1}`,
-        `${sourceIdentity}:oneOf:${index}`,
-        defaultVersion,
-        document,
-        events,
-        context,
-      );
-    });
-    return;
-  }
-
-  const schemaPointer = joinPointer(messagePointer, "payload");
-  const sourceSchemaDialect = schemaDialect(
-    isJsonSchema(message["payload"]) ? message["payload"] : true,
-    document,
-    "asyncapi",
-    declaredSchemaDialect,
-  );
-  const resolvedSchema = resolveSchema(
-    message["payload"],
-    schemaPointer,
-    context,
-    sourceSchemaDialect,
-  );
-  if (resolvedSchema === undefined) {
-    return;
-  }
   const schema = resolvedSchema.schema;
   const examples = asyncApiExamples(message, messagePointer, context);
   const dialect = schemaDialect(
@@ -286,6 +216,317 @@ export function addAsyncMessage(
   );
 }
 
+export function addAsyncMessage(
+  messageValue: JsonValue,
+  messagePointer: string,
+  fallbackName: string,
+  sourceIdentity: string,
+  defaultVersion: string,
+  document: JsonObject,
+  events: ExtractedEvent[],
+  context: ExtractionContext,
+): void {
+  if (context.outputBudget.exhausted) return;
+  const message = resolveObject(
+    messageValue,
+    messagePointer,
+    context,
+    "asyncapi-message",
+  );
+  if (message === undefined) {
+    return;
+  }
+
+  const asyncApiVersion = document["asyncapi"] === "2.6.0" ? "2.6.0" : "3.0.0";
+  const declaredSchemaDialect = resolveAsyncApiSchemaDialect(
+    message["schemaFormat"] ?? document["defaultSchemaFormat"],
+    asyncApiVersion,
+  );
+  if (declaredSchemaDialect === undefined) {
+    addAt(context, {
+      code: "ASYNCAPI_SCHEMA_FORMAT_UNSUPPORTED",
+      message: `AsyncAPI message uses unsupported schema format "${String(message["schemaFormat"])}"`,
+      pointer: joinPointer(messagePointer, "schemaFormat"),
+      severity: "error",
+    });
+    return;
+  }
+  const contentType =
+    asString(message["contentType"]) ??
+    asString(document["defaultContentType"]);
+  if (contentType !== undefined && !isJsonMediaType(contentType)) {
+    addAt(context, {
+      code: "ASYNCAPI_MEDIA_TYPE_UNSUPPORTED",
+      message: `AsyncAPI message media type "${contentType}" is not JSON`,
+      pointer:
+        asString(message["contentType"]) === undefined
+          ? "/defaultContentType"
+          : joinPointer(messagePointer, "contentType"),
+      severity: "error",
+    });
+    return;
+  }
+
+  if (Array.isArray(message["oneOf"])) {
+    message["oneOf"].forEach((item, index) => {
+      addAsyncMessage(
+        item,
+        joinPointer(joinPointer(messagePointer, "oneOf"), index),
+        `${fallbackName}.${index + 1}`,
+        `${sourceIdentity}:oneOf:${index}`,
+        defaultVersion,
+        document,
+        events,
+        context,
+      );
+    });
+    return;
+  }
+
+  const schemaPointer = joinPointer(messagePointer, "payload");
+  const sourceSchemaDialect = schemaDialect(
+    isJsonSchema(message["payload"]) ? message["payload"] : true,
+    document,
+    "asyncapi",
+    declaredSchemaDialect,
+  );
+  const resolvedSchema = resolveSchema(
+    message["payload"],
+    schemaPointer,
+    context,
+    sourceSchemaDialect,
+  );
+  if (resolvedSchema === undefined) {
+    return;
+  }
+  addResolvedAsyncMessage(
+    message,
+    messagePointer,
+    fallbackName,
+    sourceIdentity,
+    defaultVersion,
+    document,
+    events,
+    context,
+    schemaPointer,
+    resolvedSchema,
+    declaredSchemaDialect,
+  );
+}
+
+function addAsyncApi2ChannelEvents(
+  channels: JsonObject,
+  defaultVersion: string,
+  document: JsonObject,
+  events: ExtractedEvent[],
+  context: ExtractionContext,
+): void {
+  for (const channelName of Object.keys(channels).sort(compareCodeUnits)) {
+    if (context.validationBudget.exhausted || context.outputBudget.exhausted) {
+      break;
+    }
+    const channelPointer = `/channels/${escapePointerToken(channelName)}`;
+    const channel = resolveObject(
+      channels[channelName],
+      channelPointer,
+      context,
+      "asyncapi-channel",
+    );
+    const operationPointer = joinPointer(channelPointer, "subscribe");
+    const operation = resolveObject(
+      channel?.["subscribe"],
+      operationPointer,
+      context,
+      "asyncapi-operation",
+    );
+    if (operation?.["message"] === undefined) {
+      continue;
+    }
+    addAsyncMessage(
+      operation["message"],
+      joinPointer(operationPointer, "message"),
+      channelName,
+      `asyncapi2:${channelPointer}:subscribe`,
+      defaultVersion,
+      document,
+      events,
+      context,
+    );
+  }
+}
+
+function addAsyncApi3OperationEvents(
+  defaultVersion: string,
+  document: JsonObject,
+  events: ExtractedEvent[],
+  context: ExtractionContext,
+): void {
+  const operations = asObject(document["operations"]);
+  if (operations !== undefined) {
+    for (const operationName of Object.keys(operations).sort(
+      compareCodeUnits,
+    )) {
+      if (
+        context.validationBudget.exhausted ||
+        context.outputBudget.exhausted
+      ) {
+        break;
+      }
+      addAsyncApi3SendOperation(
+        operations,
+        operationName,
+        defaultVersion,
+        document,
+        events,
+        context,
+      );
+    }
+  }
+}
+
+function addAsyncApi3SendOperation(
+  operations: JsonObject,
+  operationName: string,
+  defaultVersion: string,
+  document: JsonObject,
+  events: ExtractedEvent[],
+  context: ExtractionContext,
+): void {
+  const operationPointer = `/operations/${escapePointerToken(operationName)}`;
+  const operation = resolveObject(
+    operations[operationName],
+    operationPointer,
+    context,
+    "asyncapi-operation",
+  );
+  if (operation?.["action"] !== "send") {
+    return;
+  }
+  const channelPointer = joinPointer(operationPointer, "channel");
+  const channel =
+    operation["channel"] === undefined
+      ? undefined
+      : resolveObject(
+          operation["channel"],
+          channelPointer,
+          context,
+          "asyncapi-channel",
+        );
+  if (channel === undefined) {
+    addAt(context, {
+      code: "ASYNCAPI_SEND_CHANNEL_MISSING",
+      message: `Send operation "${operationName}" must reference a channel`,
+      pointer: channelPointer,
+      severity: "error",
+    });
+    return;
+  }
+  const channelMessages = asObject(channel["messages"]);
+  if (
+    channelMessages === undefined ||
+    Object.keys(channelMessages).length === 0
+  ) {
+    addAt(context, {
+      code: "ASYNCAPI_CHANNEL_MESSAGES_MISSING",
+      message: `Send operation "${operationName}" references a channel without messages`,
+      pointer: joinPointer(channelPointer, "messages"),
+      severity: "error",
+    });
+    return;
+  }
+
+  const availableMessages = Object.keys(channelMessages)
+    .sort(compareCodeUnits)
+    .flatMap((name) => {
+      const pointer = joinPointer(
+        joinPointer(channelPointer, "messages"),
+        name,
+      );
+      const raw = channelMessages[name];
+      const resolved =
+        raw === undefined
+          ? undefined
+          : resolveObject(raw, pointer, context, "asyncapi-message");
+      return raw === undefined || resolved === undefined
+        ? []
+        : [{ name, pointer, raw, resolved }];
+    });
+  const requested = operation["messages"];
+  const selected:
+    | readonly {
+        readonly identity: string;
+        readonly pointer: string;
+        readonly raw: JsonValue;
+      }[]
+    | undefined =
+    requested === undefined
+      ? availableMessages.map(({ name, pointer, raw }) => ({
+          identity: `asyncapi3:${channelPointer}:message:${name}`,
+          pointer,
+          raw,
+        }))
+      : Array.isArray(requested)
+        ? requested.flatMap((message, index) => {
+            const pointer = joinPointer(
+              joinPointer(operationPointer, "messages"),
+              index,
+            );
+            const resolved = resolveObject(
+              message,
+              pointer,
+              context,
+              "asyncapi-message",
+            );
+            const match =
+              resolved === undefined
+                ? undefined
+                : availableMessages.find(({ resolved: candidate }) =>
+                    jsonEqual(candidate, resolved),
+                  );
+            if (match === undefined) {
+              addAt(context, {
+                code: "ASYNCAPI_SEND_MESSAGE_NOT_IN_CHANNEL",
+                message: `Send operation "${operationName}" references a message outside its channel`,
+                pointer,
+                severity: "error",
+              });
+              return [];
+            }
+            return [
+              {
+                identity:
+                  isJsonObject(message) && typeof message["$ref"] === "string"
+                    ? `asyncapi3:${message["$ref"]}`
+                    : `asyncapi3:${channelPointer}:message:${match.name}`,
+                pointer,
+                raw: message,
+              },
+            ];
+          })
+        : undefined;
+  if (selected === undefined || selected.length === 0) {
+    addAt(context, {
+      code: "ASYNCAPI_SEND_MESSAGES_MISSING",
+      message: `Send operation "${operationName}" has no usable channel messages`,
+      pointer: joinPointer(operationPointer, "messages"),
+      severity: "error",
+    });
+    return;
+  }
+  selected.forEach(({ identity, pointer, raw }) => {
+    addAsyncMessage(
+      raw,
+      pointer,
+      operationName,
+      identity,
+      defaultVersion,
+      document,
+      events,
+      context,
+    );
+  });
+}
+
 export function asyncApiEvents(
   document: JsonObject,
   version: string,
@@ -307,189 +548,15 @@ export function asyncApiEvents(
   const events: ExtractedEvent[] = [];
 
   if (version.startsWith("2.6.")) {
-    for (const channelName of Object.keys(channels).sort(compareCodeUnits)) {
-      if (
-        context.validationBudget.exhausted ||
-        context.outputBudget.exhausted
-      ) {
-        break;
-      }
-      const channelPointer = `/channels/${escapePointerToken(channelName)}`;
-      const channel = resolveObject(
-        channels[channelName],
-        channelPointer,
-        context,
-        "asyncapi-channel",
-      );
-      const operationPointer = joinPointer(channelPointer, "subscribe");
-      const operation = resolveObject(
-        channel?.["subscribe"],
-        operationPointer,
-        context,
-        "asyncapi-operation",
-      );
-      if (operation?.["message"] === undefined) {
-        continue;
-      }
-      addAsyncMessage(
-        operation["message"],
-        joinPointer(operationPointer, "message"),
-        channelName,
-        `asyncapi2:${channelPointer}:subscribe`,
-        defaultVersion,
-        document,
-        events,
-        context,
-      );
-    }
+    addAsyncApi2ChannelEvents(
+      channels,
+      defaultVersion,
+      document,
+      events,
+      context,
+    );
   } else {
-    const operations = asObject(document["operations"]);
-    if (operations !== undefined) {
-      for (const operationName of Object.keys(operations).sort(
-        compareCodeUnits,
-      )) {
-        if (
-          context.validationBudget.exhausted ||
-          context.outputBudget.exhausted
-        ) {
-          break;
-        }
-        const operationPointer = `/operations/${escapePointerToken(operationName)}`;
-        const operation = resolveObject(
-          operations[operationName],
-          operationPointer,
-          context,
-          "asyncapi-operation",
-        );
-        if (operation?.["action"] !== "send") {
-          continue;
-        }
-        const channelPointer = joinPointer(operationPointer, "channel");
-        const channel =
-          operation["channel"] === undefined
-            ? undefined
-            : resolveObject(
-                operation["channel"],
-                channelPointer,
-                context,
-                "asyncapi-channel",
-              );
-        if (channel === undefined) {
-          addAt(context, {
-            code: "ASYNCAPI_SEND_CHANNEL_MISSING",
-            message: `Send operation "${operationName}" must reference a channel`,
-            pointer: channelPointer,
-            severity: "error",
-          });
-          continue;
-        }
-        const channelMessages = asObject(channel["messages"]);
-        if (
-          channelMessages === undefined ||
-          Object.keys(channelMessages).length === 0
-        ) {
-          addAt(context, {
-            code: "ASYNCAPI_CHANNEL_MESSAGES_MISSING",
-            message: `Send operation "${operationName}" references a channel without messages`,
-            pointer: joinPointer(channelPointer, "messages"),
-            severity: "error",
-          });
-          continue;
-        }
-
-        const availableMessages = Object.keys(channelMessages)
-          .sort(compareCodeUnits)
-          .flatMap((name) => {
-            const pointer = joinPointer(
-              joinPointer(channelPointer, "messages"),
-              name,
-            );
-            const raw = channelMessages[name];
-            const resolved =
-              raw === undefined
-                ? undefined
-                : resolveObject(raw, pointer, context, "asyncapi-message");
-            return raw === undefined || resolved === undefined
-              ? []
-              : [{ name, pointer, raw, resolved }];
-          });
-        const requested = operation["messages"];
-        const selected:
-          | readonly {
-              readonly identity: string;
-              readonly pointer: string;
-              readonly raw: JsonValue;
-            }[]
-          | undefined =
-          requested === undefined
-            ? availableMessages.map(({ name, pointer, raw }) => ({
-                identity: `asyncapi3:${channelPointer}:message:${name}`,
-                pointer,
-                raw,
-              }))
-            : Array.isArray(requested)
-              ? requested.flatMap((message, index) => {
-                  const pointer = joinPointer(
-                    joinPointer(operationPointer, "messages"),
-                    index,
-                  );
-                  const resolved = resolveObject(
-                    message,
-                    pointer,
-                    context,
-                    "asyncapi-message",
-                  );
-                  const match =
-                    resolved === undefined
-                      ? undefined
-                      : availableMessages.find(({ resolved: candidate }) =>
-                          jsonEqual(candidate, resolved),
-                        );
-                  if (match === undefined) {
-                    addAt(context, {
-                      code: "ASYNCAPI_SEND_MESSAGE_NOT_IN_CHANNEL",
-                      message: `Send operation "${operationName}" references a message outside its channel`,
-                      pointer,
-                      severity: "error",
-                    });
-                    return [];
-                  }
-                  return [
-                    {
-                      identity:
-                        isJsonObject(message) &&
-                        typeof message["$ref"] === "string"
-                          ? `asyncapi3:${message["$ref"]}`
-                          : `asyncapi3:${channelPointer}:message:${match.name}`,
-                      pointer,
-                      raw: message,
-                    },
-                  ];
-                })
-              : undefined;
-        if (selected === undefined || selected.length === 0) {
-          addAt(context, {
-            code: "ASYNCAPI_SEND_MESSAGES_MISSING",
-            message: `Send operation "${operationName}" has no usable channel messages`,
-            pointer: joinPointer(operationPointer, "messages"),
-            severity: "error",
-          });
-          continue;
-        }
-        selected.forEach(({ identity, pointer, raw }) => {
-          addAsyncMessage(
-            raw,
-            pointer,
-            operationName,
-            identity,
-            defaultVersion,
-            document,
-            events,
-            context,
-          );
-        });
-      }
-    }
+    addAsyncApi3OperationEvents(defaultVersion, document, events, context);
   }
 
   if (events.length === 0) {

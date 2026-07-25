@@ -541,6 +541,53 @@ function resolveReferenceNode(
   }
   return { allOf: [resolvedTarget, resolvedSiblings] };
 }
+// prettier-ignore
+function resolvePatternPropertiesNode(item: JsonObject, childSourcePointer: string, childCanonicalPointer: string, state: ResolveState, stack: ReadonlyMap<string, string>, depth: number, dialect: string): Record<string, JsonValue> | undefined {
+  const patterns: Record<string, JsonValue> = {};
+  if (!reserveSchemaOutput(state, childSourcePointer, 1, 2)) return undefined;
+  let patternIndex = 0;
+  for (const pattern of Object.keys(item).sort(compareCodeUnits)) {
+    state.regexConstraintsSkipped += 1;
+    const child = item[pattern];
+    if (!isJsonSchema(child)) return addError(state, "SCHEMA_INVALID", "patternProperties entries must be JSON Schemas", joinPointer(childSourcePointer, pattern));
+    if (!reserveOutputProperty(state, joinPointer(childSourcePointer, pattern), pattern, patternIndex)) return undefined;
+    patternIndex += 1;
+    const resolved = resolveSchemaNode(child, joinPointer(childSourcePointer, pattern), joinPointer(childCanonicalPointer, pattern), state, stack, depth + 1, dialect);
+    if (resolved === undefined) return undefined;
+    patterns[pattern] = resolved;
+  }
+  return patterns;
+}
+
+// prettier-ignore
+function resolveSchemaMapNode(key: string, item: JsonObject, childSourcePointer: string, childCanonicalPointer: string, state: ResolveState, stack: ReadonlyMap<string, string>, depth: number, dialect: string): Record<string, JsonValue> | undefined {
+  const map: Record<string, JsonValue> = {};
+  if (!reserveSchemaOutput(state, childSourcePointer, 1, 2)) return undefined;
+  let mapIndex = 0;
+  for (const name of Object.keys(item).sort(compareCodeUnits)) {
+    const child = item[name];
+    if (!isJsonSchema(child)) return addError(state, "SCHEMA_INVALID", `${key} entries must be JSON Schemas`, joinPointer(childSourcePointer, name));
+    if (!reserveOutputProperty(state, joinPointer(childSourcePointer, name), name, mapIndex)) return undefined;
+    mapIndex += 1;
+    const resolved = resolveSchemaNode(child, joinPointer(childSourcePointer, name), joinPointer(childCanonicalPointer, name), state, stack, depth + 1, dialect);
+    if (resolved === undefined) return undefined;
+    map[name] = resolved;
+  }
+  return map;
+}
+
+// prettier-ignore
+function resolveSchemaArrayNode(key: string, item: readonly JsonValue[], childSourcePointer: string, childCanonicalPointer: string, state: ResolveState, stack: ReadonlyMap<string, string>, depth: number, dialect: string): JsonValue[] | undefined {
+  const schemas: JsonValue[] = [];
+  if (!reserveSchemaOutput(state, childSourcePointer, 1, 2 + Math.max(0, item.length - 1))) return undefined;
+  for (const [index, child] of item.entries()) {
+    if (!isJsonSchema(child)) return addError(state, "SCHEMA_INVALID", `${key} entries must be JSON Schemas`, joinPointer(childSourcePointer, index));
+    const resolved = resolveSchemaNode(child, joinPointer(childSourcePointer, index), joinPointer(childCanonicalPointer, index), state, stack, depth + 1, dialect);
+    if (resolved === undefined) return undefined;
+    schemas.push(resolved);
+  }
+  return schemas;
+}
 
 function resolveObjectNode(
   schema: JsonObject,
@@ -574,127 +621,50 @@ function resolveObjectNode(
       }
       result[key] = item;
     } else if (key === "patternProperties" && isJsonObject(item)) {
-      const patterns: Record<string, JsonValue> = {};
-      if (!reserveSchemaOutput(state, childSourcePointer, 1, 2)) {
+      const patterns = resolvePatternPropertiesNode(
+        item,
+        childSourcePointer,
+        childCanonicalPointer,
+        state,
+        stack,
+        depth,
+        dialect,
+      );
+      if (patterns === undefined) {
         return undefined;
-      }
-      let patternIndex = 0;
-      for (const pattern of Object.keys(item).sort(compareCodeUnits)) {
-        state.regexConstraintsSkipped += 1;
-        const child = item[pattern];
-        if (!isJsonSchema(child)) {
-          return addError(
-            state,
-            "SCHEMA_INVALID",
-            "patternProperties entries must be JSON Schemas",
-            joinPointer(childSourcePointer, pattern),
-          );
-        }
-        if (
-          !reserveOutputProperty(
-            state,
-            joinPointer(childSourcePointer, pattern),
-            pattern,
-            patternIndex,
-          )
-        ) {
-          return undefined;
-        }
-        patternIndex += 1;
-        const resolved = resolveSchemaNode(
-          child,
-          joinPointer(childSourcePointer, pattern),
-          joinPointer(childCanonicalPointer, pattern),
-          state,
-          stack,
-          depth + 1,
-          dialect,
-        );
-        if (resolved === undefined) {
-          return undefined;
-        }
-        patterns[pattern] = resolved;
       }
       result[key] = patterns;
     } else if (SCHEMA_MAP_KEYWORDS.has(key) && isJsonObject(item)) {
-      const map: Record<string, JsonValue> = {};
-      if (!reserveSchemaOutput(state, childSourcePointer, 1, 2)) {
+      const map = resolveSchemaMapNode(
+        key,
+        item,
+        childSourcePointer,
+        childCanonicalPointer,
+        state,
+        stack,
+        depth,
+        dialect,
+      );
+      if (map === undefined) {
         return undefined;
-      }
-      let mapIndex = 0;
-      for (const name of Object.keys(item).sort(compareCodeUnits)) {
-        const child = item[name];
-        if (!isJsonSchema(child)) {
-          return addError(
-            state,
-            "SCHEMA_INVALID",
-            `${key} entries must be JSON Schemas`,
-            joinPointer(childSourcePointer, name),
-          );
-        }
-        if (
-          !reserveOutputProperty(
-            state,
-            joinPointer(childSourcePointer, name),
-            name,
-            mapIndex,
-          )
-        ) {
-          return undefined;
-        }
-        mapIndex += 1;
-        const resolved = resolveSchemaNode(
-          child,
-          joinPointer(childSourcePointer, name),
-          joinPointer(childCanonicalPointer, name),
-          state,
-          stack,
-          depth + 1,
-          dialect,
-        );
-        if (resolved === undefined) {
-          return undefined;
-        }
-        map[name] = resolved;
       }
       result[key] = map;
     } else if (
       (SCHEMA_ARRAY_KEYWORDS.has(key) || key === "items") &&
       Array.isArray(item)
     ) {
-      const schemas: JsonValue[] = [];
-      if (
-        !reserveSchemaOutput(
-          state,
-          childSourcePointer,
-          1,
-          2 + Math.max(0, item.length - 1),
-        )
-      ) {
+      const schemas = resolveSchemaArrayNode(
+        key,
+        item,
+        childSourcePointer,
+        childCanonicalPointer,
+        state,
+        stack,
+        depth,
+        dialect,
+      );
+      if (schemas === undefined) {
         return undefined;
-      }
-      for (const [index, child] of item.entries()) {
-        if (!isJsonSchema(child)) {
-          return addError(
-            state,
-            "SCHEMA_INVALID",
-            `${key} entries must be JSON Schemas`,
-            joinPointer(childSourcePointer, index),
-          );
-        }
-        const resolved = resolveSchemaNode(
-          child,
-          joinPointer(childSourcePointer, index),
-          joinPointer(childCanonicalPointer, index),
-          state,
-          stack,
-          depth + 1,
-          dialect,
-        );
-        if (resolved === undefined) {
-          return undefined;
-        }
-        schemas.push(resolved);
       }
       result[key] = schemas;
     } else if (SCHEMA_SINGLE_KEYWORDS.has(key) && isJsonSchema(item)) {

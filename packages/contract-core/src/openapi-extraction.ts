@@ -136,6 +136,152 @@ export function isJsonMediaType(value: string): boolean {
   );
 }
 
+function addOpenApiWebhookOperation(
+  pathItem: JsonObject,
+  webhookName: string,
+  webhookPointer: string,
+  method: (typeof HTTP_METHODS)[number],
+  defaultVersion: string,
+  document: JsonObject,
+  events: ExtractedEvent[],
+  context: ExtractionContext,
+): void {
+  const operationPointer = joinPointer(webhookPointer, method);
+  const operation = resolveObject(
+    pathItem[method],
+    operationPointer,
+    context,
+    "openapi-operation",
+  );
+  if (operation === undefined) {
+    return;
+  }
+  if (!isJsonObject(operation["responses"])) {
+    addAt(context, {
+      code: "OPENAPI_WEBHOOK_RESPONSES_MISSING",
+      message: `Webhook operation "${webhookName}.${method}" requires a responses object`,
+      pointer: joinPointer(operationPointer, "responses"),
+      severity: "error",
+    });
+    return;
+  }
+
+  const requestBodyPointer = joinPointer(operationPointer, "requestBody");
+  const requestBody = resolveObject(
+    operation["requestBody"],
+    requestBodyPointer,
+    context,
+    "openapi-request-body",
+  );
+  const contentPointer = joinPointer(requestBodyPointer, "content");
+  const content = asObject(requestBody?.["content"]);
+  const selectedMediaType =
+    content === undefined ? undefined : jsonMediaType(content);
+  if (content === undefined || selectedMediaType === undefined) {
+    addAt(context, {
+      code: "OPENAPI_JSON_PAYLOAD_MISSING",
+      message: `Webhook "${webhookName}" has no JSON request body`,
+      pointer: requestBodyPointer,
+      severity: "error",
+    });
+    return;
+  }
+
+  const mediaPointer = joinPointer(contentPointer, selectedMediaType);
+  const media = resolveObject(
+    content[selectedMediaType],
+    mediaPointer,
+    context,
+    "direct",
+  );
+  if (media === undefined) {
+    return;
+  }
+  const schemaPointer = joinPointer(mediaPointer, "schema");
+  const sourceSchemaDialect = schemaDialect(
+    isJsonSchema(media["schema"]) ? media["schema"] : true,
+    document,
+    "openapi",
+  );
+  const resolvedSchema = resolveSchema(
+    media["schema"],
+    schemaPointer,
+    context,
+    sourceSchemaDialect,
+  );
+  if (resolvedSchema === undefined) {
+    return;
+  }
+  const schema = resolvedSchema.schema;
+
+  const externalName = selectedString(
+    readNonBlankString(operation, "x-event-type", operationPointer, context),
+    readNonBlankString(pathItem, "x-event-type", webhookPointer, context),
+    `${webhookName}.${method}`,
+  );
+  const publicVersion = selectedString(
+    readNonBlankString(operation, "x-event-version", operationPointer, context),
+    readNonBlankString(pathItem, "x-event-version", webhookPointer, context),
+    defaultVersion,
+  );
+  const selectedIdentity = selectedString(
+    readNonBlankString(operation, "x-event-id", operationPointer, context),
+    readNonBlankString(pathItem, "x-event-id", webhookPointer, context),
+    `openapi:${webhookPointer}:${method}`,
+  );
+  if (
+    externalName === undefined ||
+    publicVersion === undefined ||
+    selectedIdentity === undefined
+  ) {
+    addAt(context, {
+      code: "CANONICAL_EVENT_IDENTITY_INVALID",
+      message:
+        "Event name, public version, and source identity must be non-empty",
+      pointer: operationPointer,
+      severity: "error",
+    });
+    return;
+  }
+  const examples = extractOpenApiExamples(media, schema, mediaPointer, context);
+  const dialect = schemaDialect(schema, document, "openapi");
+  validateCanonicalExamples(
+    schema,
+    dialect,
+    schemaPointer,
+    resolvedSchema.bytes,
+    resolvedSchema.nodes,
+    examples,
+    context,
+  );
+
+  const description = asString(operation["description"]);
+  const extensions = collectExtensions(operation, INTERPRETED_EVENT_EXTENSIONS);
+  const operationSignature = inheritedSignature(operation, pathItem, document);
+  const title = asString(operation["summary"]);
+  addExtractedEvent(
+    events,
+    {
+      deprecated: asBoolean(operation["deprecated"]) ?? false,
+      examples,
+      externalName,
+      publicVersion,
+      schema,
+      schemaDialect: dialect,
+      schemaPointer,
+      sourceIdentity: selectedIdentity,
+      sourcePointer: operationPointer,
+      ...(description === undefined ? {} : { description }),
+      ...(extensions === undefined ? {} : { extensions }),
+      ...(operationSignature === undefined
+        ? {}
+        : { signatureProfile: operationSignature }),
+      ...(title === undefined ? {} : { title }),
+    },
+    context,
+  );
+}
+
 export function openApiEvents(
   document: JsonObject,
   context: ExtractionContext,
@@ -199,165 +345,14 @@ export function openApiEvents(
       ) {
         break;
       }
-      const operationPointer = joinPointer(webhookPointer, method);
-      const operation = resolveObject(
-        pathItem[method],
-        operationPointer,
-        context,
-        "openapi-operation",
-      );
-      if (operation === undefined) {
-        continue;
-      }
-      if (!isJsonObject(operation["responses"])) {
-        addAt(context, {
-          code: "OPENAPI_WEBHOOK_RESPONSES_MISSING",
-          message: `Webhook operation "${webhookName}.${method}" requires a responses object`,
-          pointer: joinPointer(operationPointer, "responses"),
-          severity: "error",
-        });
-        continue;
-      }
-
-      const requestBodyPointer = joinPointer(operationPointer, "requestBody");
-      const requestBody = resolveObject(
-        operation["requestBody"],
-        requestBodyPointer,
-        context,
-        "openapi-request-body",
-      );
-      const contentPointer = joinPointer(requestBodyPointer, "content");
-      const content = asObject(requestBody?.["content"]);
-      const selectedMediaType =
-        content === undefined ? undefined : jsonMediaType(content);
-      if (content === undefined || selectedMediaType === undefined) {
-        addAt(context, {
-          code: "OPENAPI_JSON_PAYLOAD_MISSING",
-          message: `Webhook "${webhookName}" has no JSON request body`,
-          pointer: requestBodyPointer,
-          severity: "error",
-        });
-        continue;
-      }
-
-      const mediaPointer = joinPointer(contentPointer, selectedMediaType);
-      const media = resolveObject(
-        content[selectedMediaType],
-        mediaPointer,
-        context,
-        "direct",
-      );
-      if (media === undefined) {
-        continue;
-      }
-      const schemaPointer = joinPointer(mediaPointer, "schema");
-      const sourceSchemaDialect = schemaDialect(
-        isJsonSchema(media["schema"]) ? media["schema"] : true,
-        document,
-        "openapi",
-      );
-      const resolvedSchema = resolveSchema(
-        media["schema"],
-        schemaPointer,
-        context,
-        sourceSchemaDialect,
-      );
-      if (resolvedSchema === undefined) {
-        continue;
-      }
-      const schema = resolvedSchema.schema;
-
-      const externalName = selectedString(
-        readNonBlankString(
-          operation,
-          "x-event-type",
-          operationPointer,
-          context,
-        ),
-        readNonBlankString(pathItem, "x-event-type", webhookPointer, context),
-        `${webhookName}.${method}`,
-      );
-      const publicVersion = selectedString(
-        readNonBlankString(
-          operation,
-          "x-event-version",
-          operationPointer,
-          context,
-        ),
-        readNonBlankString(
-          pathItem,
-          "x-event-version",
-          webhookPointer,
-          context,
-        ),
-        defaultVersion,
-      );
-      const selectedIdentity = selectedString(
-        readNonBlankString(operation, "x-event-id", operationPointer, context),
-        readNonBlankString(pathItem, "x-event-id", webhookPointer, context),
-        `openapi:${webhookPointer}:${method}`,
-      );
-      if (
-        externalName === undefined ||
-        publicVersion === undefined ||
-        selectedIdentity === undefined
-      ) {
-        addAt(context, {
-          code: "CANONICAL_EVENT_IDENTITY_INVALID",
-          message:
-            "Event name, public version, and source identity must be non-empty",
-          pointer: operationPointer,
-          severity: "error",
-        });
-        continue;
-      }
-      const examples = extractOpenApiExamples(
-        media,
-        schema,
-        mediaPointer,
-        context,
-      );
-      const dialect = schemaDialect(schema, document, "openapi");
-      validateCanonicalExamples(
-        schema,
-        dialect,
-        schemaPointer,
-        resolvedSchema.bytes,
-        resolvedSchema.nodes,
-        examples,
-        context,
-      );
-
-      const description = asString(operation["description"]);
-      const extensions = collectExtensions(
-        operation,
-        INTERPRETED_EVENT_EXTENSIONS,
-      );
-      const operationSignature = inheritedSignature(
-        operation,
+      addOpenApiWebhookOperation(
         pathItem,
+        webhookName,
+        webhookPointer,
+        method,
+        defaultVersion,
         document,
-      );
-      const title = asString(operation["summary"]);
-      addExtractedEvent(
         events,
-        {
-          deprecated: asBoolean(operation["deprecated"]) ?? false,
-          examples,
-          externalName,
-          publicVersion,
-          schema,
-          schemaDialect: dialect,
-          schemaPointer,
-          sourceIdentity: selectedIdentity,
-          sourcePointer: operationPointer,
-          ...(description === undefined ? {} : { description }),
-          ...(extensions === undefined ? {} : { extensions }),
-          ...(operationSignature === undefined
-            ? {}
-            : { signatureProfile: operationSignature }),
-          ...(title === undefined ? {} : { title }),
-        },
         context,
       );
     }

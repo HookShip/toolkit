@@ -357,6 +357,49 @@ function matchesSchemaType(value: JsonValue, type: string): boolean {
   }
 }
 
+function evaluateUnsupportedFiniteKeywords(
+  schema: JsonSchema,
+): FiniteEvaluation {
+  const evaluatedKeywords = new Set([
+    "$comment",
+    "$schema",
+    "additionalProperties",
+    "allOf",
+    "anyOf",
+    "const",
+    "default",
+    "deprecated",
+    "description",
+    "enum",
+    "examples",
+    "exclusiveMaximum",
+    "exclusiveMinimum",
+    "items",
+    "maxItems",
+    "maxLength",
+    "maximum",
+    "minItems",
+    "minLength",
+    "minimum",
+    "multipleOf",
+    "oneOf",
+    "properties",
+    "readOnly",
+    "required",
+    "title",
+    "type",
+    "writeOnly",
+  ]);
+  if (
+    Object.keys(schema).some(
+      (keyword) => !evaluatedKeywords.has(keyword) && !keyword.startsWith("x-"),
+    )
+  ) {
+    return "unknown";
+  }
+  return true;
+}
+
 function evaluateFiniteValue(
   value: JsonValue,
   schema: JsonSchema,
@@ -488,44 +531,7 @@ function evaluateFiniteValue(
     }
   }
 
-  const evaluatedKeywords = new Set([
-    "$comment",
-    "$schema",
-    "additionalProperties",
-    "allOf",
-    "anyOf",
-    "const",
-    "default",
-    "deprecated",
-    "description",
-    "enum",
-    "examples",
-    "exclusiveMaximum",
-    "exclusiveMinimum",
-    "items",
-    "maxItems",
-    "maxLength",
-    "maximum",
-    "minItems",
-    "minLength",
-    "minimum",
-    "multipleOf",
-    "oneOf",
-    "properties",
-    "readOnly",
-    "required",
-    "title",
-    "type",
-    "writeOnly",
-  ]);
-  if (
-    Object.keys(schema).some(
-      (keyword) => !evaluatedKeywords.has(keyword) && !keyword.startsWith("x-"),
-    )
-  ) {
-    return "unknown";
-  }
-  return true;
+  return evaluateUnsupportedFiniteKeywords(schema);
 }
 
 function compareFiniteAcceptedValues(
@@ -949,139 +955,123 @@ function compareBounds(
   }
 }
 
-function compareObjects(
+function compareObjectProperty(
+  name: string,
+  previous: JsonObject,
+  next: JsonObject,
+  previousProperties: JsonObject,
+  nextProperties: JsonObject,
+  previousRequired: ReadonlySet<string>,
+  nextRequired: ReadonlySet<string>,
+  pointer: string,
+  eventId: string,
+  context: DiffContext,
+): void {
+  const propertyPointer = `${pointer}/properties/${escapePointerToken(name)}`;
+  const before = previousProperties[name];
+  const after = nextProperties[name];
+  if (previousRequired.has(name) !== nextRequired.has(name)) {
+    addChange(context, {
+      code: nextRequired.has(name)
+        ? "PROPERTY_BECAME_REQUIRED"
+        : "PROPERTY_BECAME_OPTIONAL",
+      eventId,
+      kind: "required-changed",
+      message: `Property "${name}" became ${nextRequired.has(name) ? "required" : "optional"}`,
+      next: nextRequired.has(name),
+      pointer: `${pointer}/required`,
+      previous: previousRequired.has(name),
+      status: nextRequired.has(name) ? "breaking" : "compatible",
+    });
+  }
+  if (before === undefined && after !== undefined) {
+    const required = nextRequired.has(name);
+    const unsupported = unsupportedKeyword(after as JsonSchema);
+    const previousAdditional = previous["additionalProperties"];
+    const optionalStatus: CompatibilityStatus =
+      previousAdditional === false
+        ? "compatible"
+        : previousAdditional === undefined || previousAdditional === true
+          ? after === true
+            ? "compatible"
+            : "breaking"
+          : jsonEqual(previousAdditional, after)
+            ? "compatible"
+            : "unknown";
+    addChange(context, {
+      code:
+        unsupported === undefined
+          ? required
+            ? "REQUIRED_PROPERTY_ADDED"
+            : optionalStatus === "breaking"
+              ? "OPTIONAL_PROPERTY_CONFLICT"
+              : optionalStatus === "unknown"
+                ? "OPTIONAL_PROPERTY_INCLUSION_UNKNOWN"
+                : "OPTIONAL_PROPERTY_ADDED"
+          : "PROPERTY_SCHEMA_UNSUPPORTED",
+      eventId,
+      kind: "property-added",
+      message:
+        unsupported === undefined
+          ? `${required ? "Required" : "Optional"} property "${name}" was added`
+          : `Property "${name}" uses unsupported schema keyword "${unsupported}"`,
+      next: after,
+      pointer: propertyPointer,
+      status:
+        unsupported === undefined
+          ? required
+            ? "breaking"
+            : optionalStatus
+          : "unknown",
+    });
+    return;
+  }
+  if (before !== undefined && after === undefined) {
+    const nextAdditional = next["additionalProperties"];
+    const status: CompatibilityStatus =
+      nextAdditional === undefined || nextAdditional === true
+        ? "compatible"
+        : nextAdditional === false
+          ? "breaking"
+          : jsonEqual(before, nextAdditional)
+            ? "compatible"
+            : "unknown";
+    addChange(context, {
+      code:
+        status === "compatible"
+          ? previousRequired.has(name)
+            ? "REQUIRED_PROPERTY_REMOVED"
+            : "PROPERTY_CONSTRAINT_REMOVED"
+          : status === "breaking"
+            ? "PROPERTY_REMOVED"
+            : "PROPERTY_REMOVAL_INCLUSION_UNKNOWN",
+      eventId,
+      kind: "property-removed",
+      message: `Property "${name}" was removed`,
+      pointer: propertyPointer,
+      previous: before,
+      status,
+    });
+    return;
+  }
+  if (before !== undefined && after !== undefined) {
+    compareSchema(
+      before as JsonSchema,
+      after as JsonSchema,
+      propertyPointer,
+      eventId,
+      context,
+    );
+  }
+}
+
+function compareAdditionalPropertiesPolicy(
   previous: JsonObject,
   next: JsonObject,
   pointer: string,
   eventId: string,
   context: DiffContext,
 ): void {
-  const previousProperties = isJsonObject(previous["properties"])
-    ? previous["properties"]
-    : {};
-  const nextProperties = isJsonObject(next["properties"])
-    ? next["properties"]
-    : {};
-  const previousRequired = new Set(
-    Array.isArray(previous["required"])
-      ? previous["required"].filter(
-          (item): item is string => typeof item === "string",
-        )
-      : [],
-  );
-  const nextRequired = new Set(
-    Array.isArray(next["required"])
-      ? next["required"].filter(
-          (item): item is string => typeof item === "string",
-        )
-      : [],
-  );
-
-  const propertyNames = new Set([
-    ...Object.keys(previousProperties),
-    ...Object.keys(nextProperties),
-    ...previousRequired,
-    ...nextRequired,
-  ]);
-  for (const name of [...propertyNames].sort(compareCodeUnits)) {
-    const propertyPointer = `${pointer}/properties/${escapePointerToken(name)}`;
-    const before = previousProperties[name];
-    const after = nextProperties[name];
-    if (previousRequired.has(name) !== nextRequired.has(name)) {
-      addChange(context, {
-        code: nextRequired.has(name)
-          ? "PROPERTY_BECAME_REQUIRED"
-          : "PROPERTY_BECAME_OPTIONAL",
-        eventId,
-        kind: "required-changed",
-        message: `Property "${name}" became ${nextRequired.has(name) ? "required" : "optional"}`,
-        next: nextRequired.has(name),
-        pointer: `${pointer}/required`,
-        previous: previousRequired.has(name),
-        status: nextRequired.has(name) ? "breaking" : "compatible",
-      });
-    }
-    if (before === undefined && after !== undefined) {
-      const required = nextRequired.has(name);
-      const unsupported = unsupportedKeyword(after as JsonSchema);
-      const previousAdditional = previous["additionalProperties"];
-      const optionalStatus: CompatibilityStatus =
-        previousAdditional === false
-          ? "compatible"
-          : previousAdditional === undefined || previousAdditional === true
-            ? after === true
-              ? "compatible"
-              : "breaking"
-            : jsonEqual(previousAdditional, after)
-              ? "compatible"
-              : "unknown";
-      addChange(context, {
-        code:
-          unsupported === undefined
-            ? required
-              ? "REQUIRED_PROPERTY_ADDED"
-              : optionalStatus === "breaking"
-                ? "OPTIONAL_PROPERTY_CONFLICT"
-                : optionalStatus === "unknown"
-                  ? "OPTIONAL_PROPERTY_INCLUSION_UNKNOWN"
-                  : "OPTIONAL_PROPERTY_ADDED"
-            : "PROPERTY_SCHEMA_UNSUPPORTED",
-        eventId,
-        kind: "property-added",
-        message:
-          unsupported === undefined
-            ? `${required ? "Required" : "Optional"} property "${name}" was added`
-            : `Property "${name}" uses unsupported schema keyword "${unsupported}"`,
-        next: after,
-        pointer: propertyPointer,
-        status:
-          unsupported === undefined
-            ? required
-              ? "breaking"
-              : optionalStatus
-            : "unknown",
-      });
-      continue;
-    }
-    if (before !== undefined && after === undefined) {
-      const nextAdditional = next["additionalProperties"];
-      const status: CompatibilityStatus =
-        nextAdditional === undefined || nextAdditional === true
-          ? "compatible"
-          : nextAdditional === false
-            ? "breaking"
-            : jsonEqual(before, nextAdditional)
-              ? "compatible"
-              : "unknown";
-      addChange(context, {
-        code:
-          status === "compatible"
-            ? previousRequired.has(name)
-              ? "REQUIRED_PROPERTY_REMOVED"
-              : "PROPERTY_CONSTRAINT_REMOVED"
-            : status === "breaking"
-              ? "PROPERTY_REMOVED"
-              : "PROPERTY_REMOVAL_INCLUSION_UNKNOWN",
-        eventId,
-        kind: "property-removed",
-        message: `Property "${name}" was removed`,
-        pointer: propertyPointer,
-        previous: before,
-        status,
-      });
-      continue;
-    }
-    if (before !== undefined && after !== undefined) {
-      compareSchema(
-        before as JsonSchema,
-        after as JsonSchema,
-        propertyPointer,
-        eventId,
-        context,
-      );
-    }
-  }
-
   const beforeAdditional = previous["additionalProperties"];
   const afterAdditional = next["additionalProperties"];
   const beforePolicy =
@@ -1153,6 +1143,58 @@ function compareObjects(
       status: "compatible",
     });
   }
+}
+
+function compareObjects(
+  previous: JsonObject,
+  next: JsonObject,
+  pointer: string,
+  eventId: string,
+  context: DiffContext,
+): void {
+  const previousProperties = isJsonObject(previous["properties"])
+    ? previous["properties"]
+    : {};
+  const nextProperties = isJsonObject(next["properties"])
+    ? next["properties"]
+    : {};
+  const previousRequired = new Set(
+    Array.isArray(previous["required"])
+      ? previous["required"].filter(
+          (item): item is string => typeof item === "string",
+        )
+      : [],
+  );
+  const nextRequired = new Set(
+    Array.isArray(next["required"])
+      ? next["required"].filter(
+          (item): item is string => typeof item === "string",
+        )
+      : [],
+  );
+
+  const propertyNames = new Set([
+    ...Object.keys(previousProperties),
+    ...Object.keys(nextProperties),
+    ...previousRequired,
+    ...nextRequired,
+  ]);
+  for (const name of [...propertyNames].sort(compareCodeUnits)) {
+    compareObjectProperty(
+      name,
+      previous,
+      next,
+      previousProperties,
+      nextProperties,
+      previousRequired,
+      nextRequired,
+      pointer,
+      eventId,
+      context,
+    );
+  }
+
+  compareAdditionalPropertiesPolicy(previous, next, pointer, eventId, context);
 }
 
 function compareArrays(
