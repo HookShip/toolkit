@@ -171,7 +171,7 @@ describe("provider-neutral inventory imports", () => {
       string,
       unknown
     >[];
-    subscriptions.push(structuredClone(subscriptions[0]));
+    subscriptions.push(structuredClone(subscriptions[0]!));
 
     const result = parseSvixInventoryExport(JSON.stringify(source));
 
