@@ -137,6 +137,18 @@ export function validateDeliveryFields(
   value: Readonly<Record<string, unknown>>,
   issues: MetadataValidationIssue[],
 ): void {
+  validateDeliveryEnvelopeFields(value, issues);
+  validateDeliveryStringFields(value, issues);
+  validateDeliveryAttemptFields(value, issues);
+  validateDeliveryTimingFields(value, issues);
+  validateDeliveryHttpFields(value, issues);
+  validateDeliveryProvenanceFields(value, issues);
+}
+
+function validateDeliveryEnvelopeFields(
+  value: Readonly<Record<string, unknown>>,
+  issues: MetadataValidationIssue[],
+): void {
   if (value["kind"] !== "delivery_attempt") {
     issue(
       issues,
@@ -153,6 +165,12 @@ export function validateDeliveryFields(
       "The metadata schema version is unsupported.",
     );
   }
+}
+
+function validateDeliveryStringFields(
+  value: Readonly<Record<string, unknown>>,
+  issues: MetadataValidationIssue[],
+): void {
   for (const field of ["deliveryId", "endpointId", "eventId"] as const) {
     if (!validString(value[field])) {
       issue(
@@ -179,6 +197,12 @@ export function validateDeliveryFields(
       );
     }
   }
+}
+
+function validateDeliveryAttemptFields(
+  value: Readonly<Record<string, unknown>>,
+  issues: MetadataValidationIssue[],
+): void {
   for (const field of ["attempt", "sequence"] as const) {
     if (!Number.isSafeInteger(value[field]) || (value[field] as number) < 0) {
       issue(
@@ -200,6 +224,12 @@ export function validateDeliveryFields(
       "The delivery status is invalid.",
     );
   }
+}
+
+function validateDeliveryTimingFields(
+  value: Readonly<Record<string, unknown>>,
+  issues: MetadataValidationIssue[],
+): void {
   if (!validDateTime(value["occurredAt"])) {
     issue(
       issues,
@@ -219,6 +249,12 @@ export function validateDeliveryFields(
       "nextAttemptAt must be an RFC 3339 date-time.",
     );
   }
+}
+
+function validateDeliveryHttpFields(
+  value: Readonly<Record<string, unknown>>,
+  issues: MetadataValidationIssue[],
+): void {
   if (
     value["responseStatusCode"] !== undefined &&
     (!Number.isSafeInteger(value["responseStatusCode"]) ||
@@ -256,6 +292,12 @@ export function validateDeliveryFields(
       "retryable must be boolean.",
     );
   }
+}
+
+function validateDeliveryProvenanceFields(
+  value: Readonly<Record<string, unknown>>,
+  issues: MetadataValidationIssue[],
+): void {
   if (
     !isMappingVersion(value["mappingVersion"]) ||
     !onlyKeys(value["mappingVersion"], mappingFields) ||

@@ -118,190 +118,247 @@ function exampleBundle() {
   });
 }
 
+function runAssetPathTraversalCase(
+  draft: ReturnType<typeof createExampleTransformManifest>,
+): void {
+  expectRejected(() =>
+    createExtensionBundle({
+      manifest: draft,
+      assets: [
+        {
+          path: "../transform.json",
+          mediaType: "application/json",
+          content: EXAMPLE_TRANSFORM_ASSET,
+        },
+      ],
+    }),
+  );
+}
+
+function runBinaryControlDataCase(
+  draft: ReturnType<typeof createExampleTransformManifest>,
+): void {
+  expectRejected(() =>
+    createExtensionBundle({
+      manifest: draft,
+      assets: [
+        {
+          path: "transform.json",
+          mediaType: "application/json",
+          content: `${EXAMPLE_TRANSFORM_ASSET}\u0000`,
+        },
+      ],
+    }),
+  );
+}
+
+function runBundleCompressionFieldCase(): void {
+  expectRejected(() =>
+    parseExtensionBundle({ ...exampleBundle(), compression: "gzip" }),
+  );
+}
+
+function runDuplicateResourcePathCase(
+  draft: ReturnType<typeof createExampleTransformManifest>,
+): void {
+  expectRejected(() =>
+    normalizeExtensionManifestDraft({
+      ...draft,
+      resources: [
+        ...draft.resources,
+        { path: "TRANSFORM.JSON", mediaType: "application/json" },
+      ],
+    }),
+  );
+}
+
+function runExecutableAssetPathCase(
+  draft: ReturnType<typeof createExampleTransformManifest>,
+): void {
+  expectRejected(() =>
+    normalizeExtensionManifestDraft({
+      ...draft,
+      resources: [{ path: "program.js", mediaType: "text/plain" }],
+      entry: { type: "transform", program: "program.js" },
+    }),
+  );
+}
+
+function runManifestUnknownFieldCase(
+  draft: ReturnType<typeof createExampleTransformManifest>,
+): void {
+  expectRejected(() =>
+    normalizeExtensionManifestDraft({ ...draft, eval: "index.js" }),
+  );
+}
+
+function runOversizedAssetCase(
+  draft: ReturnType<typeof createExampleTransformManifest>,
+): void {
+  expectRejected(() =>
+    createExtensionBundle({
+      manifest: draft,
+      assets: [
+        {
+          path: "transform.json",
+          mediaType: "application/json",
+          content: "x".repeat(HARD_BUNDLE_LIMITS.maximumAssetBytes + 1),
+        },
+      ],
+    }),
+  );
+}
+
+function runPermissionEscalationCase(): void {
+  const bundle = exampleBundle();
+  expectRejected(() =>
+    createInstallationPermissionGrant({
+      bundleDigest: bundle.manifest.integrity.bundleDigest,
+      extensionId: bundle.manifest.identity.id,
+      grantId: "malicious-grant",
+      issuer: "conformance",
+      requested: bundle.manifest.permissions,
+      granted: { payloadRead: ["*"], payloadWrite: ["*"] },
+    }),
+  );
+}
+
+function runPrototypePollutionPointerCase(): void {
+  expectRejected(() =>
+    runTransform(
+      {
+        version: "1.0",
+        operations: [{ op: "set", path: "/__proto__/polluted", value: true }],
+      },
+      {},
+      { permissions: { payloadWrite: ["*"] } },
+    ),
+  );
+  ensureConformance(
+    (Object.prototype as Record<string, unknown>).polluted === undefined,
+    "Prototype pollution side effect was observed.",
+  );
+}
+
+function runSerializedSecretMaterialCase(
+  draft: ReturnType<typeof createExampleTransformManifest>,
+): void {
+  expectRejected(() =>
+    createExtensionBundle({
+      manifest: draft,
+      assets: [
+        {
+          path: "transform.json",
+          mediaType: "application/json",
+          content: '{"secretValue":"plaintext"}',
+        },
+      ],
+    }),
+  );
+}
+
+function runSignatureRevocationCase(): void {
+  const key = generateKeyPairSync("ed25519");
+  const signed = signExtensionBundle(exampleBundle(), {
+    keyId: "revoked-key",
+    privateKey: key.privateKey,
+  });
+  const result = verifyExtensionBundle(signed, {
+    trustPolicy: {
+      keys: [
+        {
+          keyId: "revoked-key",
+          publicKey: key.publicKey,
+          status: "revoked",
+        },
+      ],
+    },
+  });
+  ensureConformance(!result.ok, "Revoked signature was accepted.");
+  ensureConformance(
+    result.signatureErrors.some((error) => error.code === "KEY_REVOKED"),
+    "Revocation did not produce the expected verification code.",
+  );
+}
+
+function runSignatureTamperCase(): void {
+  const key = generateKeyPairSync("ed25519");
+  const signed = signExtensionBundle(exampleBundle(), {
+    keyId: "publisher-key",
+    privateKey: key.privateKey,
+  });
+  const signature = signed.manifest.integrity.signatures[0];
+  ensureConformance(signature !== undefined, "Fixture was not signed.");
+  const tampered = {
+    ...signed,
+    manifest: {
+      ...signed.manifest,
+      integrity: {
+        ...signed.manifest.integrity,
+        signatures: [
+          {
+            ...signature,
+            signature: `${
+              signature.signature.startsWith("A") ? "B" : "A"
+            }${signature.signature.slice(1)}`,
+          },
+        ],
+      },
+    },
+  };
+  const result = verifyExtensionBundle(tampered, {
+    trustPolicy: {
+      keys: [
+        {
+          keyId: "publisher-key",
+          publicKey: key.publicKey,
+          status: "active",
+        },
+      ],
+    },
+  });
+  ensureConformance(!result.ok, "Tampered signature was accepted.");
+}
+
 export function runMaliciousCorpusCase(id: MaliciousCorpusId): void {
   const draft = createExampleTransformManifest();
   switch (id) {
     case "asset-path-traversal":
-      expectRejected(() =>
-        createExtensionBundle({
-          manifest: draft,
-          assets: [
-            {
-              path: "../transform.json",
-              mediaType: "application/json",
-              content: EXAMPLE_TRANSFORM_ASSET,
-            },
-          ],
-        }),
-      );
+      runAssetPathTraversalCase(draft);
       return;
     case "binary-control-data":
-      expectRejected(() =>
-        createExtensionBundle({
-          manifest: draft,
-          assets: [
-            {
-              path: "transform.json",
-              mediaType: "application/json",
-              content: `${EXAMPLE_TRANSFORM_ASSET}\u0000`,
-            },
-          ],
-        }),
-      );
+      runBinaryControlDataCase(draft);
       return;
     case "bundle-compression-field":
-      expectRejected(() =>
-        parseExtensionBundle({ ...exampleBundle(), compression: "gzip" }),
-      );
+      runBundleCompressionFieldCase();
       return;
     case "duplicate-resource-path":
-      expectRejected(() =>
-        normalizeExtensionManifestDraft({
-          ...draft,
-          resources: [
-            ...draft.resources,
-            { path: "TRANSFORM.JSON", mediaType: "application/json" },
-          ],
-        }),
-      );
+      runDuplicateResourcePathCase(draft);
       return;
     case "executable-asset-path":
-      expectRejected(() =>
-        normalizeExtensionManifestDraft({
-          ...draft,
-          resources: [{ path: "program.js", mediaType: "text/plain" }],
-          entry: { type: "transform", program: "program.js" },
-        }),
-      );
+      runExecutableAssetPathCase(draft);
       return;
     case "manifest-unknown-field":
-      expectRejected(() =>
-        normalizeExtensionManifestDraft({ ...draft, eval: "index.js" }),
-      );
+      runManifestUnknownFieldCase(draft);
       return;
     case "oversized-asset":
-      expectRejected(() =>
-        createExtensionBundle({
-          manifest: draft,
-          assets: [
-            {
-              path: "transform.json",
-              mediaType: "application/json",
-              content: "x".repeat(HARD_BUNDLE_LIMITS.maximumAssetBytes + 1),
-            },
-          ],
-        }),
-      );
+      runOversizedAssetCase(draft);
       return;
-    case "permission-escalation": {
-      const bundle = exampleBundle();
-      expectRejected(() =>
-        createInstallationPermissionGrant({
-          bundleDigest: bundle.manifest.integrity.bundleDigest,
-          extensionId: bundle.manifest.identity.id,
-          grantId: "malicious-grant",
-          issuer: "conformance",
-          requested: bundle.manifest.permissions,
-          granted: { payloadRead: ["*"], payloadWrite: ["*"] },
-        }),
-      );
+    case "permission-escalation":
+      runPermissionEscalationCase();
       return;
-    }
     case "prototype-pollution-pointer":
-      expectRejected(() =>
-        runTransform(
-          {
-            version: "1.0",
-            operations: [
-              { op: "set", path: "/__proto__/polluted", value: true },
-            ],
-          },
-          {},
-          { permissions: { payloadWrite: ["*"] } },
-        ),
-      );
-      ensureConformance(
-        (Object.prototype as Record<string, unknown>).polluted === undefined,
-        "Prototype pollution side effect was observed.",
-      );
+      runPrototypePollutionPointerCase();
       return;
     case "serialized-secret-material":
-      expectRejected(() =>
-        createExtensionBundle({
-          manifest: draft,
-          assets: [
-            {
-              path: "transform.json",
-              mediaType: "application/json",
-              content: '{"secretValue":"plaintext"}',
-            },
-          ],
-        }),
-      );
+      runSerializedSecretMaterialCase(draft);
       return;
-    case "signature-revocation": {
-      const key = generateKeyPairSync("ed25519");
-      const signed = signExtensionBundle(exampleBundle(), {
-        keyId: "revoked-key",
-        privateKey: key.privateKey,
-      });
-      const result = verifyExtensionBundle(signed, {
-        trustPolicy: {
-          keys: [
-            {
-              keyId: "revoked-key",
-              publicKey: key.publicKey,
-              status: "revoked",
-            },
-          ],
-        },
-      });
-      ensureConformance(!result.ok, "Revoked signature was accepted.");
-      ensureConformance(
-        result.signatureErrors.some((error) => error.code === "KEY_REVOKED"),
-        "Revocation did not produce the expected verification code.",
-      );
+    case "signature-revocation":
+      runSignatureRevocationCase();
       return;
-    }
-    case "signature-tamper": {
-      const key = generateKeyPairSync("ed25519");
-      const signed = signExtensionBundle(exampleBundle(), {
-        keyId: "publisher-key",
-        privateKey: key.privateKey,
-      });
-      const signature = signed.manifest.integrity.signatures[0];
-      ensureConformance(signature !== undefined, "Fixture was not signed.");
-      const tampered = {
-        ...signed,
-        manifest: {
-          ...signed.manifest,
-          integrity: {
-            ...signed.manifest.integrity,
-            signatures: [
-              {
-                ...signature,
-                signature: `${
-                  signature.signature.startsWith("A") ? "B" : "A"
-                }${signature.signature.slice(1)}`,
-              },
-            ],
-          },
-        },
-      };
-      const result = verifyExtensionBundle(tampered, {
-        trustPolicy: {
-          keys: [
-            {
-              keyId: "publisher-key",
-              publicKey: key.publicKey,
-              status: "active",
-            },
-          ],
-        },
-      });
-      ensureConformance(!result.ok, "Tampered signature was accepted.");
+    case "signature-tamper":
+      runSignatureTamperCase();
       return;
-    }
   }
 }
 
