@@ -8,6 +8,7 @@ import {
   changelogReadyStatusLine,
   changelogUnreleasedStatus,
   expectedOwnership,
+  forbiddenLifecycleScripts,
   manifestPath,
   publicPackageCount,
   readJson,
@@ -90,6 +91,20 @@ export function sameValues(left, right) {
     left.length === right.length &&
     left.every((value, index) => value === right[index])
   );
+}
+
+// Returns the sorted list of automatic install/publish lifecycle scripts a
+// package declares. A non-empty result means installing or publishing the
+// package would run package code automatically, which publishable packages must
+// never do.
+export function lifecycleScriptViolations(pkg) {
+  const scripts =
+    pkg && typeof pkg.scripts === "object" && pkg.scripts !== null
+      ? pkg.scripts
+      : {};
+  return Object.keys(scripts)
+    .filter((name) => forbiddenLifecycleScripts.has(name))
+    .sort();
 }
 
 export async function checkReferenceApp(failures) {
@@ -235,6 +250,12 @@ export async function check() {
       }
       if (!Array.isArray(pkg.files) || pkg.files.length === 0) {
         failures.push(`${entry.name}: package files allowlist is missing`);
+      }
+      const lifecycleViolations = lifecycleScriptViolations(pkg);
+      if (lifecycleViolations.length > 0) {
+        failures.push(
+          `${entry.name}: forbidden install/publish lifecycle script(s) ${lifecycleViolations.join(", ")} (publishable packages must not run automatic install or publish hooks)`,
+        );
       }
       for (const failure of validateRepository(
         pkg.repository,

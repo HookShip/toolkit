@@ -229,6 +229,10 @@ export async function publishCohort(options) {
       await tarballForEntry(entry),
       "--access",
       "public",
+      // Publishing a prebuilt tarball needs no scripts; disabling them keeps a
+      // future prepublish/prepack/publish hook from executing in the trusted
+      // release environment (defense in depth alongside the manifest check).
+      "--ignore-scripts",
     ];
     if (provenance) args.push("--provenance");
     if (registry) args.push("--registry", registry);

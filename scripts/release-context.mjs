@@ -51,6 +51,24 @@ export const repositoryUrl = "git+https://github.com/HookShip/toolkit.git";
 
 export const releaseTypes = new Set(["major", "minor", "patch"]);
 
+// npm/pnpm run these lifecycle scripts automatically on install or publish. A
+// publishable package must not define any of them, so installing or publishing
+// the cohort can never execute arbitrary package code. Prefixed custom hooks
+// like `pretypecheck` are not in this set because they run only when their
+// explicitly named script is invoked.
+export const forbiddenLifecycleScripts = new Set([
+  "preinstall",
+  "install",
+  "postinstall",
+  "prepare",
+  "prepublish",
+  "prepublishOnly",
+  "prepack",
+  "postpack",
+  "publish",
+  "postpublish",
+]);
+
 export async function readJson(file) {
   return JSON.parse(await readFile(file, "utf8"));
 }

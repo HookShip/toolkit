@@ -97,6 +97,12 @@ a real apply, on a dirty tree. Ordinary development checks accept both states.
   the GitHub release are **supplementary and unsigned** (they declare this in
   their `attestation` block); see
   [`generated-artifacts.md`](generated-artifacts.md).
+- **No install/publish code execution.** `check` fails closed if any publishable
+  package declares an automatic install or publish lifecycle script
+  (`preinstall`, `install`, `postinstall`, `prepare`, `prepublish`,
+  `prepublishOnly`, `prepack`, `postpack`, `publish`, `postpublish`), and the
+  execute path also passes `npm publish --ignore-scripts`, so neither installing
+  nor publishing the cohort runs arbitrary package code.
 - **No stored tokens.** The script only reads an ambient publishing context (an
   OIDC token or an already-authenticated npm user) and never reads, writes, or
   persists a token. There is no npm token in this repository.

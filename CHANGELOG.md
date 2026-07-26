@@ -78,6 +78,9 @@ Release status: unreleased.
 - Generated `*.provenance.json` statements now mark themselves supplementary and
   unsigned and name npm registry OIDC provenance as authoritative, and populate
   a real GitHub Actions builder id and invocation id when run in CI.
+- Publishing now fails closed on any automatic install/publish lifecycle script
+  in a publishable package and runs `npm publish --ignore-scripts`, so the
+  cohort never executes package code on install or publish.
 - Extracted the public toolkit from assumptions about absent private
   applications, packages, infrastructure, and operational documents.
 - Coordinated all 14 public packages in one release manifest while retaining

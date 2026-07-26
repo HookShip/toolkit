@@ -14,6 +14,7 @@ import {
 import * as git from "./release-git.mjs";
 import {
   sameValues,
+  lifecycleScriptViolations,
   validateOwnership,
   validateRepository,
 } from "./release-manifest.mjs";
@@ -325,6 +326,22 @@ test("provenanceStatement marks itself supplementary and unsigned vs npm OIDC", 
     statement.predicate.buildDefinition.resolvedDependencies[0].digest.sha256,
     "sha256-lock",
   );
+});
+
+test("lifecycleScriptViolations flags automatic install/publish hooks only", () => {
+  assert.deepEqual(
+    lifecycleScriptViolations({
+      scripts: { build: "tsc", test: "vitest", pretypecheck: "x" },
+    }),
+    [],
+  );
+  assert.deepEqual(
+    lifecycleScriptViolations({
+      scripts: { postinstall: "curl evil", prepublishOnly: "x", build: "tsc" },
+    }),
+    ["postinstall", "prepublishOnly"],
+  );
+  assert.deepEqual(lifecycleScriptViolations({}), []);
 });
 
 test("release-publish orders the graph topologically and preflights publishes", () => {
