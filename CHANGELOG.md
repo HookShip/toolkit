@@ -71,3 +71,19 @@ Release status: unreleased.
 - Documented that this repository is the sole publisher of the cohort; other
   repositories consume the published packages rather than re-publishing them.
   Migrating a downstream consumer is a separate, dependent workstream.
+
+### Security
+
+- Pinned four transitive production dependencies to patched versions via
+  narrowly scoped `overrides` in `pnpm-workspace.yaml`, clearing the
+  corresponding high-severity Dependabot advisories without changing any
+  published package's declared ranges:
+  - `find-my-way` `<=9.6.0` -> `9.7.0` (GHSA-c96f-x56v-gq3h, HTTP/2 DDoS);
+  - `fast-uri` `3.x <=3.1.3` -> `3.1.4` and `4.x <4.1.1` -> `4.1.1`
+    (GHSA-v2hh-gcrm-f6hx, ReDoS);
+  - `fast-xml-parser` `>=5.9.3 <5.10.1` -> `5.10.1` (GHSA-8r6m-32jq-jx6q,
+    entity-expansion limit reset).
+  - `brace-expansion` `5.x <=5.0.7` -> `5.0.8` (GHSA-mh99-v99m-4gvg, ReDoS); a
+    development-only toolchain dependency (reached solely through
+    eslint/typescript-eslint), pinned so the whole tree carries no known
+    high/critical advisory while the enforced gate stays production-scoped.
