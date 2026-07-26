@@ -18,14 +18,19 @@ export function registerSystemRoutes(
   app: FastifyInstance,
   deps: RouteContext,
 ): void {
-  const {
-    options,
-    payloadStorage,
-    maintenanceStatus,
-    refreshCleanupRequirement,
-    cleanupRequiredWithoutStorage,
-    setCleanupRequiredWithoutStorage,
-  } = deps;
+  registerHealthRoutes(app, deps);
+  registerMetricsRoute(app, deps);
+  registerDocsRoutes(app);
+  registerPreviewRoutes(app, deps);
+}
+
+function registerHealthRoutes(app: FastifyInstance, deps: RouteContext): void {
+  registerLiveHealthRoute(app);
+  registerReadyHealthRoute(app, deps);
+  registerMaintenanceHealthRoute(app, deps);
+}
+
+function registerLiveHealthRoute(app: FastifyInstance): void {
   app.get(
     "/health/live",
     {
@@ -36,6 +41,19 @@ export function registerSystemRoutes(
     },
     async () => ({ status: "ok" }),
   );
+}
+
+function registerReadyHealthRoute(
+  app: FastifyInstance,
+  deps: RouteContext,
+): void {
+  const {
+    options,
+    payloadStorage,
+    maintenanceStatus,
+    refreshCleanupRequirement,
+    cleanupRequiredWithoutStorage,
+  } = deps;
   app.get(
     "/health/ready",
     {
@@ -119,6 +137,18 @@ export function registerSystemRoutes(
       };
     },
   );
+}
+
+function registerMaintenanceHealthRoute(
+  app: FastifyInstance,
+  deps: RouteContext,
+): void {
+  const {
+    payloadStorage,
+    maintenanceStatus,
+    refreshCleanupRequirement,
+    setCleanupRequiredWithoutStorage,
+  } = deps;
   app.get(
     "/health/maintenance",
     {
@@ -142,6 +172,15 @@ export function registerSystemRoutes(
       });
     },
   );
+}
+
+function registerMetricsRoute(app: FastifyInstance, deps: RouteContext): void {
+  const {
+    payloadStorage,
+    maintenanceStatus,
+    refreshCleanupRequirement,
+    setCleanupRequiredWithoutStorage,
+  } = deps;
   app.get("/metrics", { schema: { hide: true } }, async (_request, reply) => {
     if (!payloadStorage.capabilities.cleanup) {
       try {
@@ -154,7 +193,9 @@ export function registerSystemRoutes(
       .type("text/plain; version=0.0.4; charset=utf-8")
       .send(payloadMaintenanceMetrics(maintenanceStatus()));
   });
+}
 
+function registerDocsRoutes(app: FastifyInstance): void {
   app.get("/openapi.json", { schema: { hide: true } }, async () =>
     app.swagger(),
   );
@@ -175,79 +216,89 @@ at-most-once signed tests, and an authenticated metadata timeline.</p>
 <li><code>GET /metrics</code></li></ul>
 </main></body></html>`);
   });
+}
 
-  const previewHandler = async (
-    request: FastifyRequest,
-    reply: FastifyReply,
-  ) => {
-    const query = queryObject(request);
-    const importId = queryString(query, "importId");
-    const releaseId = queryString(query, "releaseId");
-    if (importId !== undefined && releaseId !== undefined) {
-      throw new ReferenceApiError(
-        400,
-        "PREVIEW_SOURCE_CONFLICT",
-        "Choose either importId or releaseId for preview.",
-      );
-    }
-    const selectedRelease =
-      releaseId === undefined
-        ? importId === undefined
-          ? await options.repository.getActiveRelease()
-          : undefined
-        : await options.repository.getRelease(releaseId);
-    if (releaseId !== undefined && selectedRelease === undefined) {
-      throw new ReferenceApiError(
-        404,
-        "RELEASE_NOT_FOUND",
-        "The release preview candidate was not found.",
-      );
-    }
-    const selectedImport =
-      importId === undefined
-        ? undefined
-        : await options.repository.getContractImport(importId);
-    if (importId !== undefined && selectedImport === undefined) {
-      throw new ReferenceApiError(
-        404,
-        "IMPORT_NOT_FOUND",
-        "The contract import preview candidate was not found.",
-      );
-    }
-    if (selectedImport !== undefined && selectedImport.contract === undefined) {
-      throw new ReferenceApiError(
-        422,
-        "IMPORT_NOT_PREVIEWABLE",
-        "The contract import has no previewable canonical contract.",
-        { importStatus: selectedImport.status },
-      );
-    }
-    const contract = selectedImport?.contract ?? selectedRelease?.contract;
-    const previewLabel =
-      selectedImport !== undefined
-        ? `Draft import ${selectedImport.id}`
-        : selectedRelease !== undefined
-          ? `${selectedRelease.active ? "Active" : "Candidate"} release ${selectedRelease.id}`
-          : "No active release";
-    const endpoints = await options.repository.listEndpoints();
-    const timeline = await options.repository.listTimeline({ limit: 20 });
-    const events =
-      contract?.eventTypes
-        .map(
-          (
-            event,
-          ) => `<article><h2>${escapeHtml(event.title ?? event.externalName)}</h2>
+function registerPreviewRoutes(app: FastifyInstance, deps: RouteContext): void {
+  const previewHandler = async (request: FastifyRequest, reply: FastifyReply) =>
+    preview(request, reply, deps);
+  app.get("/", { schema: { hide: true } }, previewHandler);
+  app.get("/preview", { schema: { hide: true } }, previewHandler);
+}
+
+async function preview(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  deps: RouteContext,
+) {
+  const { options } = deps;
+  const query = queryObject(request);
+  const importId = queryString(query, "importId");
+  const releaseId = queryString(query, "releaseId");
+  if (importId !== undefined && releaseId !== undefined) {
+    throw new ReferenceApiError(
+      400,
+      "PREVIEW_SOURCE_CONFLICT",
+      "Choose either importId or releaseId for preview.",
+    );
+  }
+  const selectedRelease =
+    releaseId === undefined
+      ? importId === undefined
+        ? await options.repository.getActiveRelease()
+        : undefined
+      : await options.repository.getRelease(releaseId);
+  if (releaseId !== undefined && selectedRelease === undefined) {
+    throw new ReferenceApiError(
+      404,
+      "RELEASE_NOT_FOUND",
+      "The release preview candidate was not found.",
+    );
+  }
+  const selectedImport =
+    importId === undefined
+      ? undefined
+      : await options.repository.getContractImport(importId);
+  if (importId !== undefined && selectedImport === undefined) {
+    throw new ReferenceApiError(
+      404,
+      "IMPORT_NOT_FOUND",
+      "The contract import preview candidate was not found.",
+    );
+  }
+  if (selectedImport !== undefined && selectedImport.contract === undefined) {
+    throw new ReferenceApiError(
+      422,
+      "IMPORT_NOT_PREVIEWABLE",
+      "The contract import has no previewable canonical contract.",
+      { importStatus: selectedImport.status },
+    );
+  }
+  const contract = selectedImport?.contract ?? selectedRelease?.contract;
+  const previewLabel =
+    selectedImport !== undefined
+      ? `Draft import ${selectedImport.id}`
+      : selectedRelease !== undefined
+        ? `${selectedRelease.active ? "Active" : "Candidate"} release ${selectedRelease.id}`
+        : "No active release";
+  const endpoints = await options.repository.listEndpoints();
+  const timeline = await options.repository.listTimeline({ limit: 20 });
+  const events =
+    contract?.eventTypes
+      .map(
+        (
+          event,
+        ) => `<article><h2>${escapeHtml(event.title ?? event.externalName)}</h2>
 <p><code>${escapeHtml(event.externalName)}</code></p>
 ${event.description === undefined ? "" : `<p>${escapeHtml(event.description)}</p>`}
 <ul>${event.versions
-            .map(
-              (version) =>
-                `<li>Version ${escapeHtml(version.publicVersion)} — ${version.examples.length} example(s)</li>`,
-            )
-            .join("")}</ul></article>`,
-        )
-        .join("") ?? "<p>No release has been published.</p>";
-    return reply.type("text/html; charset=utf-8").send(`<!doctype html>
+          .map(
+            (version) =>
+              `<li>Version ${escapeHtml(version.publicVersion)} — ${version.examples.length} example(s)</li>`,
+          )
+          .join("")}</ul></article>`,
+      )
+      .join("") ?? "<p>No release has been published.</p>";
+  return reply.type("text/html; charset=utf-8").send(`<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Webhook Portal local preview</title><style>
 body{font:16px/1.55 system-ui,sans-serif;max-width:72rem;margin:auto;padding:2rem;color:#17202a}
@@ -274,7 +325,4 @@ ${
         .join("")}</tbody></table>`
 }</section>
 <p><a href="/docs">API documentation</a></p></main></body></html>`);
-  };
-  app.get("/", { schema: { hide: true } }, previewHandler);
-  app.get("/preview", { schema: { hide: true } }, previewHandler);
 }

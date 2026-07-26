@@ -136,25 +136,10 @@ export function isLoopbackHost(host: string): boolean {
   );
 }
 
-export function referenceServerConfigFromEnv(
+function tlsConfigFromEnv(
   environment: NodeJS.ProcessEnv,
-  overrides: Partial<
-    Pick<ReferenceServerConfig, "host" | "port" | "allowLocalNetwork">
-  > = {},
-): ReferenceServerConfig {
-  const host =
-    overrides.host ??
-    environment["REFERENCE_HOST"] ??
-    DEFAULT_REFERENCE_SERVER_CONFIG.host;
-  const port =
-    overrides.port ??
-    integerEnvironment(
-      environment,
-      "REFERENCE_PORT",
-      DEFAULT_REFERENCE_SERVER_CONFIG.port,
-      0,
-      65_535,
-    );
+  host: string,
+): ReferenceServerConfig["tls"] {
   const tlsCertificateFile =
     environment["REFERENCE_TLS_CERT_FILE"]?.trim() || undefined;
   const tlsKeyFile = environment["REFERENCE_TLS_KEY_FILE"]?.trim() || undefined;
@@ -195,6 +180,29 @@ export function referenceServerConfigFromEnv(
       privateKey: readFileSync(privateKeyPath),
     };
   }
+  return tls;
+}
+
+export function referenceServerConfigFromEnv(
+  environment: NodeJS.ProcessEnv,
+  overrides: Partial<
+    Pick<ReferenceServerConfig, "host" | "port" | "allowLocalNetwork">
+  > = {},
+): ReferenceServerConfig {
+  const host =
+    overrides.host ??
+    environment["REFERENCE_HOST"] ??
+    DEFAULT_REFERENCE_SERVER_CONFIG.host;
+  const port =
+    overrides.port ??
+    integerEnvironment(
+      environment,
+      "REFERENCE_PORT",
+      DEFAULT_REFERENCE_SERVER_CONFIG.port,
+      0,
+      65_535,
+    );
+  const tls = tlsConfigFromEnv(environment, host);
   const apiToken = requiredEnvironmentOrFile(
     environment,
     "REFERENCE_API_TOKEN",

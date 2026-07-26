@@ -23,80 +23,19 @@ export function registerEndpointRoutes(
   app: FastifyInstance,
   deps: RouteContext,
 ): void {
-  const { options, service } = deps;
-  async function deleteEndpointAndReport(
-    service: ReferenceService,
-    repository: ReferenceRepository,
-    request: FastifyRequest,
-    reply: FastifyReply,
-  ) {
-    const endpointId = parameter(request, "id");
-    try {
-      await service.updateEndpoint(endpointId, {
-        state: "deleted",
-        correlationId: request.id,
-      });
-    } catch (error) {
-      if (
-        !(error instanceof ReferenceApiError) ||
-        error.code !== "ENDPOINT_PAYLOAD_CLEANUP_PENDING"
-      ) {
-        throw error;
-      }
-    }
-    const endpoint = await repository.getEndpoint(endpointId);
-    if (endpoint === undefined) {
-      throw new ReferenceApiError(
-        404,
-        "ENDPOINT_NOT_FOUND",
-        "The endpoint was not found.",
-      );
-    }
-    const tasks = await repository.listPayloadCleanupTasks(10_000, endpointId);
-    return reply.status(tasks.length === 0 ? 200 : 202).send({
-      endpoint,
-      cleanup: {
-        state: tasks.length === 0 ? "completed" : "pending",
-        tasks: tasks.map(publicCleanupTask),
-      },
-    });
-  }
+  registerCreateEndpointRoute(app, deps);
+  registerListEndpointRoute(app, deps);
+  registerGetEndpointRoute(app, deps);
+  registerUpdateEndpointRoute(app, deps);
+  registerDeleteEndpointRoute(app, deps);
+  registerEndpointCleanupRoutes(app, deps);
+}
 
-  async function retryEndpointCleanupAndReport(
-    service: ReferenceService,
-    repository: ReferenceRepository,
-    request: FastifyRequest,
-    reply: FastifyReply,
-  ) {
-    const endpointId = parameter(request, "id");
-    const endpoint = await repository.getEndpoint(endpointId);
-    if (endpoint === undefined) {
-      throw new ReferenceApiError(
-        404,
-        "ENDPOINT_NOT_FOUND",
-        "The endpoint was not found.",
-      );
-    }
-    if (endpoint.state !== "deleted") {
-      throw new ReferenceApiError(
-        409,
-        "ENDPOINT_CLEANUP_RETRY_INVALID_TRANSITION",
-        "Payload cleanup can be retried only for a deleted endpoint.",
-        { currentState: endpoint.state },
-      );
-    }
-    const tasks = await repository.listPayloadCleanupTasks(10_000, endpointId);
-    if (tasks.length === 0) {
-      throw new ReferenceApiError(
-        409,
-        "ENDPOINT_CLEANUP_RETRY_INVALID_TRANSITION",
-        "The deleted endpoint has no failed or pending payload cleanup to retry.",
-        { currentState: endpoint.state, cleanupState: "completed" },
-      );
-    }
-    return deleteEndpointAndReport(service, repository, request, reply);
-  }
-
+function registerCreateEndpointRoute(
+  app: FastifyInstance,
+  deps: RouteContext,
+): void {
+  const { service } = deps;
   app.post(
     "/v1/endpoints",
     {
@@ -134,11 +73,25 @@ export function registerEndpointRoutes(
       return reply.status(201).send({ endpoint });
     },
   );
+}
+
+function registerListEndpointRoute(
+  app: FastifyInstance,
+  deps: RouteContext,
+): void {
+  const { options } = deps;
   app.get(
     "/v1/endpoints",
     { schema: schema("List endpoints", ["endpoints"]) },
     async () => ({ endpoints: await options.repository.listEndpoints() }),
   );
+}
+
+function registerGetEndpointRoute(
+  app: FastifyInstance,
+  deps: RouteContext,
+): void {
+  const { options, service } = deps;
   app.get(
     "/v1/endpoints/:id",
     {
@@ -177,6 +130,13 @@ export function registerEndpointRoutes(
       };
     },
   );
+}
+
+function registerUpdateEndpointRoute(
+  app: FastifyInstance,
+  deps: RouteContext,
+): void {
+  const { service } = deps;
   app.patch(
     "/v1/endpoints/:id",
     {
@@ -226,6 +186,13 @@ export function registerEndpointRoutes(
       return { endpoint };
     },
   );
+}
+
+function registerDeleteEndpointRoute(
+  app: FastifyInstance,
+  deps: RouteContext,
+): void {
+  const { options, service } = deps;
   app.delete(
     "/v1/endpoints/:id",
     {
@@ -237,7 +204,13 @@ export function registerEndpointRoutes(
     async (request, reply) =>
       deleteEndpointAndReport(service, options.repository, request, reply),
   );
+}
 
+function registerEndpointCleanupRoutes(
+  app: FastifyInstance,
+  deps: RouteContext,
+): void {
+  const { options, service } = deps;
   app.get(
     "/v1/endpoints/:id/cleanup",
     {
@@ -297,4 +270,77 @@ export function registerEndpointRoutes(
         reply,
       ),
   );
+}
+
+async function deleteEndpointAndReport(
+  service: ReferenceService,
+  repository: ReferenceRepository,
+  request: FastifyRequest,
+  reply: FastifyReply,
+) {
+  const endpointId = parameter(request, "id");
+  try {
+    await service.updateEndpoint(endpointId, {
+      state: "deleted",
+      correlationId: request.id,
+    });
+  } catch (error) {
+    if (
+      !(error instanceof ReferenceApiError) ||
+      error.code !== "ENDPOINT_PAYLOAD_CLEANUP_PENDING"
+    ) {
+      throw error;
+    }
+  }
+  const endpoint = await repository.getEndpoint(endpointId);
+  if (endpoint === undefined) {
+    throw new ReferenceApiError(
+      404,
+      "ENDPOINT_NOT_FOUND",
+      "The endpoint was not found.",
+    );
+  }
+  const tasks = await repository.listPayloadCleanupTasks(10_000, endpointId);
+  return reply.status(tasks.length === 0 ? 200 : 202).send({
+    endpoint,
+    cleanup: {
+      state: tasks.length === 0 ? "completed" : "pending",
+      tasks: tasks.map(publicCleanupTask),
+    },
+  });
+}
+
+async function retryEndpointCleanupAndReport(
+  service: ReferenceService,
+  repository: ReferenceRepository,
+  request: FastifyRequest,
+  reply: FastifyReply,
+) {
+  const endpointId = parameter(request, "id");
+  const endpoint = await repository.getEndpoint(endpointId);
+  if (endpoint === undefined) {
+    throw new ReferenceApiError(
+      404,
+      "ENDPOINT_NOT_FOUND",
+      "The endpoint was not found.",
+    );
+  }
+  if (endpoint.state !== "deleted") {
+    throw new ReferenceApiError(
+      409,
+      "ENDPOINT_CLEANUP_RETRY_INVALID_TRANSITION",
+      "Payload cleanup can be retried only for a deleted endpoint.",
+      { currentState: endpoint.state },
+    );
+  }
+  const tasks = await repository.listPayloadCleanupTasks(10_000, endpointId);
+  if (tasks.length === 0) {
+    throw new ReferenceApiError(
+      409,
+      "ENDPOINT_CLEANUP_RETRY_INVALID_TRANSITION",
+      "The deleted endpoint has no failed or pending payload cleanup to retry.",
+      { currentState: endpoint.state, cleanupState: "completed" },
+    );
+  }
+  return deleteEndpointAndReport(service, repository, request, reply);
 }

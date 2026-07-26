@@ -22,6 +22,15 @@ export function registerMetadataRoutes(
   app: FastifyInstance,
   deps: RouteContext,
 ): void {
+  registerMetadataIngestRoute(app, deps);
+  registerTimelineRoute(app, deps);
+  registerAuditRoute(app, deps);
+}
+
+function registerMetadataIngestRoute(
+  app: FastifyInstance,
+  deps: RouteContext,
+): void {
   const { service } = deps;
   app.post(
     "/v1/ingest",
@@ -88,6 +97,10 @@ export function registerMetadataRoutes(
       return reply.status(202).send({ summary });
     },
   );
+}
+
+function registerTimelineRoute(app: FastifyInstance, deps: RouteContext): void {
+  const { service } = deps;
   app.get(
     "/v1/timeline",
     {
@@ -172,6 +185,10 @@ export function registerMetadataRoutes(
       );
     },
   );
+}
+
+function registerAuditRoute(app: FastifyInstance, deps: RouteContext): void {
+  const { service } = deps;
   app.get(
     "/v1/audit",
     {

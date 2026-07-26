@@ -158,8 +158,27 @@ export class PostgresEndpointRepository implements EndpointRepository {
         };
       }
 
-      const references = await this.#ctx.client().query<JsonRecordRow>(
-        `SELECT payload.record
+      await this.#deleteEndpointPayloadReferences(id, timestamp);
+      await this.#orphanEndpointPayloadIntents(id, timestamp);
+      await this.#deleteEndpointRelatedRows(id);
+      const tombstone = await this.#tombstoneEndpoint(id, timestamp, current);
+      return {
+        endpoint: tombstone,
+        cleanupTasks: await this.#ctx.repository.listPayloadCleanupTasks(
+          10_000,
+          id,
+        ),
+        newlyDeleted: true,
+      };
+    });
+  }
+
+  async #deleteEndpointPayloadReferences(
+    id: string,
+    timestamp: string,
+  ): Promise<void> {
+    const references = await this.#ctx.client().query<JsonRecordRow>(
+      `SELECT payload.record
            FROM reference_payload_references AS payload
            WHERE payload.endpoint_id = $1
               OR (
@@ -171,147 +190,152 @@ export class PostgresEndpointRepository implements EndpointRepository {
                 )
               )
            FOR UPDATE`,
-        [id],
-      );
-      for (const row of references.rows) {
-        const reference = asRecord<PayloadReference>(row.record);
-        const task: PayloadCleanupTask = {
-          id: `endpoint:${reference.id}`,
-          objectKey: reference.objectKey,
-          reason: "endpoint_deleted",
-          state: "pending",
-          createdAt: timestamp,
-          updatedAt: timestamp,
-          attempts: 0,
-          endpointId: id,
-        };
-        await this.#ctx.client().query(
-          `INSERT INTO reference_payload_cleanup_tasks(
+      [id],
+    );
+    for (const row of references.rows) {
+      const reference = asRecord<PayloadReference>(row.record);
+      const task: PayloadCleanupTask = {
+        id: `endpoint:${reference.id}`,
+        objectKey: reference.objectKey,
+        reason: "endpoint_deleted",
+        state: "pending",
+        createdAt: timestamp,
+        updatedAt: timestamp,
+        attempts: 0,
+        endpointId: id,
+      };
+      await this.#ctx.client().query(
+        `INSERT INTO reference_payload_cleanup_tasks(
                id, object_key, endpoint_id, state, reason,
                created_at, updated_at, attempts, record
              )
              VALUES ($1, $2, $3, 'pending', 'endpoint_deleted',
                      $4, $4, 0, $5::jsonb)
              ON CONFLICT(id) DO NOTHING`,
-          [task.id, task.objectKey, id, timestamp, JSON.stringify(task)],
-        );
-        const deletedReference = await this.#ctx.client().query(
-          `DELETE FROM reference_payload_references
+        [task.id, task.objectKey, id, timestamp, JSON.stringify(task)],
+      );
+      const deletedReference = await this.#ctx.client().query(
+        `DELETE FROM reference_payload_references
              WHERE id = $1
                AND object_key = $2
                AND upload_attempt_id IS NOT DISTINCT FROM $3
                AND upload_generation IS NOT DISTINCT FROM $4`,
-          [
-            reference.id,
-            reference.objectKey,
-            reference.uploadAttemptId ?? null,
-            reference.uploadGeneration ?? null,
-          ],
+        [
+          reference.id,
+          reference.objectKey,
+          reference.uploadAttemptId ?? null,
+          reference.uploadGeneration ?? null,
+        ],
+      );
+      if (deletedReference.rowCount !== 1) {
+        throw new Error(
+          "Payload reference generation changed during endpoint deletion.",
         );
-        if (deletedReference.rowCount !== 1) {
-          throw new Error(
-            "Payload reference generation changed during endpoint deletion.",
-          );
-        }
       }
-      const intents = await this.#ctx.client().query<JsonRecordRow>(
-        `SELECT record
+    }
+  }
+
+  async #orphanEndpointPayloadIntents(
+    id: string,
+    timestamp: string,
+  ): Promise<void> {
+    const intents = await this.#ctx.client().query<JsonRecordRow>(
+      `SELECT record
            FROM reference_payload_upload_intents
            WHERE endpoint_id = $1
            FOR UPDATE`,
-        [id],
-      );
-      for (const row of intents.rows) {
-        const intent = asRecord<PayloadUploadIntent>(row.record);
-        const task: PayloadCleanupTask = {
-          id: `endpoint:${intent.id}`,
-          objectKey: intent.objectKey,
-          reason: "endpoint_deleted",
-          state: "pending",
-          createdAt: timestamp,
-          updatedAt: timestamp,
-          attempts: 0,
-          endpointId: id,
-        };
-        await this.#ctx.client().query(
-          `INSERT INTO reference_payload_cleanup_tasks(
+      [id],
+    );
+    for (const row of intents.rows) {
+      const intent = asRecord<PayloadUploadIntent>(row.record);
+      const task: PayloadCleanupTask = {
+        id: `endpoint:${intent.id}`,
+        objectKey: intent.objectKey,
+        reason: "endpoint_deleted",
+        state: "pending",
+        createdAt: timestamp,
+        updatedAt: timestamp,
+        attempts: 0,
+        endpointId: id,
+      };
+      await this.#ctx.client().query(
+        `INSERT INTO reference_payload_cleanup_tasks(
                id, object_key, endpoint_id, state, reason,
                created_at, updated_at, attempts, record
              )
              VALUES ($1, $2, $3, 'pending', 'endpoint_deleted',
                      $4, $4, 0, $5::jsonb)
              ON CONFLICT(id) DO NOTHING`,
-          [task.id, task.objectKey, id, timestamp, JSON.stringify(task)],
-        );
-        const orphaned: PayloadUploadIntent = {
-          ...intent,
-          state: "orphaned",
-          updatedAt: timestamp,
-        };
-        await this.#ctx.client().query(
-          `UPDATE reference_payload_upload_intents
+        [task.id, task.objectKey, id, timestamp, JSON.stringify(task)],
+      );
+      const orphaned: PayloadUploadIntent = {
+        ...intent,
+        state: "orphaned",
+        updatedAt: timestamp,
+      };
+      await this.#ctx.client().query(
+        `UPDATE reference_payload_upload_intents
              SET state = 'orphaned', updated_at = $2, record = $3::jsonb
              WHERE id = $1`,
-          [intent.id, timestamp, JSON.stringify(orphaned)],
-        );
-      }
+        [intent.id, timestamp, JSON.stringify(orphaned)],
+      );
+    }
+  }
 
-      await this.#ctx.client().query(
-        `DELETE FROM reference_metadata_observations AS observation
+  async #deleteEndpointRelatedRows(id: string): Promise<void> {
+    await this.#ctx.client().query(
+      `DELETE FROM reference_metadata_observations AS observation
            USING reference_metadata_timeline AS timeline
            WHERE observation.identity_key = timeline.identity_key
              AND timeline.endpoint_id = $1`,
-        [id],
-      );
-      await this.#ctx
-        .client()
-        .query(
-          "DELETE FROM reference_metadata_timeline WHERE endpoint_id = $1",
-          [id],
-        );
-      await this.#ctx
-        .client()
-        .query("DELETE FROM reference_subscriptions WHERE endpoint_id = $1", [
-          id,
-        ]);
-      await this.#ctx
-        .client()
-        .query("DELETE FROM reference_secret_versions WHERE endpoint_id = $1", [
-          id,
-        ]);
-      await this.#ctx
-        .client()
-        .query("DELETE FROM reference_test_commands WHERE endpoint_id = $1", [
-          id,
-        ]);
+      [id],
+    );
+    await this.#ctx
+      .client()
+      .query("DELETE FROM reference_metadata_timeline WHERE endpoint_id = $1", [
+        id,
+      ]);
+    await this.#ctx
+      .client()
+      .query("DELETE FROM reference_subscriptions WHERE endpoint_id = $1", [
+        id,
+      ]);
+    await this.#ctx
+      .client()
+      .query("DELETE FROM reference_secret_versions WHERE endpoint_id = $1", [
+        id,
+      ]);
+    await this.#ctx
+      .client()
+      .query("DELETE FROM reference_test_commands WHERE endpoint_id = $1", [
+        id,
+      ]);
+  }
 
-      const tombstone: EndpointTombstone = {
-        id: current.id,
-        createdAt: current.createdAt,
-        updatedAt: timestamp,
-        deletedAt: timestamp,
-        state: "deleted",
-        tombstoneVersion: 1,
-      };
-      await this.#ctx.client().query(
-        `UPDATE reference_endpoints
+  async #tombstoneEndpoint(
+    id: string,
+    timestamp: string,
+    current: EndpointRecord,
+  ): Promise<EndpointTombstone> {
+    const tombstone: EndpointTombstone = {
+      id: current.id,
+      createdAt: current.createdAt,
+      updatedAt: timestamp,
+      deletedAt: timestamp,
+      state: "deleted",
+      tombstoneVersion: 1,
+    };
+    await this.#ctx.client().query(
+      `UPDATE reference_endpoints
            SET state = 'deleted',
                url = NULL,
                deleted_at = $2,
                updated_at = $2,
                record = $3::jsonb
            WHERE id = $1`,
-        [id, timestamp, JSON.stringify(tombstone)],
-      );
-      return {
-        endpoint: tombstone,
-        cleanupTasks: await this.#ctx.repository.listPayloadCleanupTasks(
-          10_000,
-          id,
-        ),
-        newlyDeleted: true,
-      };
-    });
+      [id, timestamp, JSON.stringify(tombstone)],
+    );
+    return tombstone;
   }
 
   async setSubscription(

@@ -28,6 +28,19 @@ export function registerReleaseRoutes(
   app: FastifyInstance,
   deps: RouteContext,
 ): void {
+  registerImportContractRoute(app, deps);
+  registerInspectImportRoute(app, deps);
+  registerPublishReleaseRoute(app, deps);
+  registerPublishStatusRoute(app, deps);
+  registerListReleasesRoute(app, deps);
+  registerInspectReleaseRoute(app, deps);
+  registerEventsRoute(app, deps);
+}
+
+function registerImportContractRoute(
+  app: FastifyInstance,
+  deps: RouteContext,
+): void {
   const { options, service } = deps;
   app.post(
     "/v1/contracts/import",
@@ -95,7 +108,13 @@ export function registerReleaseRoutes(
       });
     },
   );
+}
 
+function registerInspectImportRoute(
+  app: FastifyInstance,
+  deps: RouteContext,
+): void {
+  const { options } = deps;
   app.get(
     "/v1/contracts/imports/:id",
     {
@@ -126,7 +145,13 @@ export function registerReleaseRoutes(
       };
     },
   );
+}
 
+function registerPublishReleaseRoute(
+  app: FastifyInstance,
+  deps: RouteContext,
+): void {
+  const { options, service } = deps;
   app.post(
     "/v1/releases/publish",
     {
@@ -203,7 +228,13 @@ export function registerReleaseRoutes(
       }
     },
   );
+}
 
+function registerPublishStatusRoute(
+  app: FastifyInstance,
+  deps: RouteContext,
+): void {
+  const { service } = deps;
   app.get(
     "/v1/releases/publish/status",
     {
@@ -259,7 +290,13 @@ export function registerReleaseRoutes(
       });
     },
   );
+}
 
+function registerListReleasesRoute(
+  app: FastifyInstance,
+  deps: RouteContext,
+): void {
+  const { options } = deps;
   app.get(
     "/v1/releases",
     {
@@ -293,6 +330,13 @@ export function registerReleaseRoutes(
       };
     },
   );
+}
+
+function registerInspectReleaseRoute(
+  app: FastifyInstance,
+  deps: RouteContext,
+): void {
+  const { options } = deps;
   app.get(
     "/v1/releases/:id",
     {
@@ -316,6 +360,10 @@ export function registerReleaseRoutes(
       return { release };
     },
   );
+}
+
+function registerEventsRoute(app: FastifyInstance, deps: RouteContext): void {
+  const { options } = deps;
   app.get(
     "/v1/events",
     { schema: schema("List active event documentation", ["releases"]) },
