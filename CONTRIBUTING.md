@@ -65,6 +65,11 @@ Docker context and production deployment layout.
    cohort. Keep the release manifest's `ownership` block accurate and do not add
    publishing from another repository; see
    [`docs/release-policy.md`](docs/release-policy.md).
+10. Keep production source files at or below 800 lines and functions at or
+    below 150. The `pnpm check:sizes` ratchet enforces this across `packages/`,
+    `apps/`, `scripts/`, and `extensions/` (data fixtures and generated output
+    are excluded); decompose along single-responsibility seams rather than
+    grandfathering new files.
 
 Package scopes remain `@webhook-portal/*` until a separately reviewed npm-scope
 migration is possible.

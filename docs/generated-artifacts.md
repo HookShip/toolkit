@@ -45,7 +45,10 @@ is why those outputs are git-ignored.
 
 - Release artifacts carry their own provenance: SPDX SBOMs, `SHA256SUMS`
   checksums, and in-toto/SLSA provenance statements are generated for every
-  packed tarball. See [`release-policy.md`](release-policy.md).
+  packed tarball by
+  [`scripts/release-artifacts.mjs`](../scripts/release-artifacts.mjs) (invoked
+  through `release:dry-run`/`release:artifacts`). See
+  [`release-policy.md`](release-policy.md).
 - Extension bundles are reproducible from a fixed source digest and build
   timestamp; local signatures use a development key fixture and must be
   re-signed by controlled release keys. See each pack's `PROVENANCE.md`.

@@ -26,7 +26,12 @@ occurred, and which fails if any published package is outside the declared
 scope. Other repositories consume the published packages and do not re-publish
 them.
 
-Release tooling in `scripts/release.mjs` provides:
+Release tooling — a thin `scripts/release.mjs` executable facade over focused
+modules (`release-manifest` for manifest/ownership validation,
+`release-versioning` for the version/prepare lifecycle, `release-artifacts` for
+artifact/SBOM generation, `release-publish` for publish planning and execution,
+`release-git` for git/tag preflight, and `release-context` for shared constants)
+— provides:
 
 - an atomic, reversible `prepare`/`bump` path that rewrites the coordinated
   version across the manifest, package manifests, lockfile, and changelog, with

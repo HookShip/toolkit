@@ -6,6 +6,15 @@ process counterpart to the machine-enforced rules in
 [`release/manifest.json`](../release/manifest.json) and
 [`scripts/release.mjs`](../scripts/release.mjs).
 
+The release tool is a thin executable facade over focused, independently tested
+modules: `release-manifest.mjs` (manifest/ownership consistency),
+`release-versioning.mjs` (the coordinated version and prepare/stage/open-next
+lifecycle), `release-artifacts.mjs` (tarball/SBOM/provenance generation),
+`release-publish.mjs` (topological publish planning and execution),
+`release-git.mjs` (git/tag preflight), and `release-context.mjs` (shared
+constants and primitives). Their behavior is covered by
+`scripts/release.test.mjs` and `scripts/release-modules.test.mjs`.
+
 ## Ownership
 
 - This repository is the **sole publisher and single source of truth** for every
