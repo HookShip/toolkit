@@ -212,6 +212,12 @@ webhook-portal migrate
 webhook-portal serve --migrate
 ```
 
+> `@webhook-portal/reference-server-core` is declared as an **optional peer
+> dependency** pinned to the cohort version (`workspace:*`, which packs to the
+> exact release version). The whole cohort is versioned in lockstep, so the CLI
+> and the reference server are meant to be installed at the same version; a
+> consumer that upgrades only one may see an npm peer-range warning.
+
 ## Secrets and I/O
 
 Secrets are accepted only from environment variables, permission-restricted
