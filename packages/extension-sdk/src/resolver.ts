@@ -265,19 +265,11 @@ function dependencyCycle(
   return undefined;
 }
 
-export function resolveExtensions(input: {
-  readonly available: readonly unknown[];
-  readonly installed?: readonly unknown[];
-  readonly limits?: ResolverLimits;
-  readonly pins?: Readonly<Record<string, string>>;
-  readonly platformVersion: string;
-  readonly roots: readonly unknown[];
-  readonly sdkVersion: string;
-}): ExtensionResolution {
-  const limits = boundedLimits(input.limits);
-  parseSemVer(input.platformVersion);
-  parseSemVer(input.sdkVersion);
-  const roots = inspectArray(input.roots, "roots", limits.maximumPackages).map(
+function parseRoots(
+  rootsInput: readonly unknown[],
+  limits: ReturnType<typeof boundedLimits>,
+): readonly ExtensionRequirement[] {
+  const roots = inspectArray(rootsInput, "roots", limits.maximumPackages).map(
     (candidate, index) => parseRequirement(candidate, `roots[${index}]`),
   );
   if (roots.length === 0) {
@@ -296,9 +288,17 @@ export function resolveExtensions(input: {
     }
     rootIds.add(root.id);
   }
-  const pins = normalizePins(input.pins);
+  return Object.freeze(roots);
+}
+
+function candidateGroups(
+  available: readonly unknown[],
+  limits: ReturnType<typeof boundedLimits>,
+  platformVersion: string,
+  sdkVersion: string,
+): Map<string, ExtensionManifest[]> {
   const candidates = inspectArray(
-    input.available,
+    available,
     "available",
     limits.maximumCandidates,
   ).map((candidate) => parseExtensionManifest(candidate));
@@ -314,11 +314,8 @@ export function resolveExtensions(input: {
     }
     identities.add(identity);
     if (
-      !satisfiesSemVer(
-        input.platformVersion,
-        candidate.compatibility.platform,
-      ) ||
-      !satisfiesSemVer(input.sdkVersion, candidate.compatibility.sdk)
+      !satisfiesSemVer(platformVersion, candidate.compatibility.platform) ||
+      !satisfiesSemVer(sdkVersion, candidate.compatibility.sdk)
     ) {
       continue;
     }
@@ -340,7 +337,12 @@ export function resolveExtensions(input: {
         : version;
     });
   }
+  return byId;
+}
 
+function initialConstraintsFor(
+  roots: readonly ExtensionRequirement[],
+): Map<string, readonly Constraint[]> {
   const initialConstraints = new Map<string, readonly Constraint[]>();
   for (const root of roots) {
     addConstraint(initialConstraints, root.id, {
@@ -349,7 +351,15 @@ export function resolveExtensions(input: {
       range: root.range,
     });
   }
+  return initialConstraints;
+}
 
+function resolveSelectedExtensions(
+  initialConstraints: Map<string, readonly Constraint[]>,
+  byId: ReadonlyMap<string, readonly ExtensionManifest[]>,
+  pins: ReadonlyMap<string, string>,
+  limits: ReturnType<typeof boundedLimits>,
+): Map<string, ExtensionManifest> {
   let attempts = 0;
   let lastFailure: SearchFailure = {
     code: "UNSATISFIABLE_DEPENDENCY",
@@ -480,8 +490,13 @@ export function resolveExtensions(input: {
       lastFailure.details,
     );
   }
+  return selected;
+}
 
-  const nodes: ResolutionNode[] = [...selected.values()]
+function buildResolutionNodes(
+  selected: ReadonlyMap<string, ExtensionManifest>,
+): ResolutionNode[] {
+  return [...selected.values()]
     .sort((left, right) =>
       compareUtf16CodeUnits(left.identity.id, right.identity.id),
     )
@@ -493,6 +508,11 @@ export function resolveExtensions(input: {
         manifest,
       }),
     );
+}
+
+function buildResolutionEdges(
+  selected: ReadonlyMap<string, ExtensionManifest>,
+): ResolutionEdge[] {
   const edges: ResolutionEdge[] = [];
   for (const manifest of selected.values()) {
     for (const dependency of manifest.compatibility.dependencies) {
@@ -512,12 +532,14 @@ export function resolveExtensions(input: {
     const from = compareUtf16CodeUnits(left.from, right.from);
     return from === 0 ? compareUtf16CodeUnits(left.to, right.to) : from;
   });
+  return edges;
+}
 
-  const installed = inspectArray(
-    input.installed ?? [],
-    "installed",
-    limits.maximumPackages,
-  ).map((candidate, index) => parseInstalled(candidate, `installed[${index}]`));
+function buildResolutionDecisions(
+  nodes: readonly ResolutionNode[],
+  installed: readonly InstalledExtensionVersion[],
+  pins: ReadonlyMap<string, string>,
+): ResolutionDecision[] {
   const installedIds = new Set<string>();
   for (const item of installed) {
     if (installedIds.has(item.id)) {
@@ -569,6 +591,45 @@ export function resolveExtensions(input: {
     );
   }
   decisions.sort((left, right) => compareUtf16CodeUnits(left.id, right.id));
+  return decisions;
+}
+
+export function resolveExtensions(input: {
+  readonly available: readonly unknown[];
+  readonly installed?: readonly unknown[];
+  readonly limits?: ResolverLimits;
+  readonly pins?: Readonly<Record<string, string>>;
+  readonly platformVersion: string;
+  readonly roots: readonly unknown[];
+  readonly sdkVersion: string;
+}): ExtensionResolution {
+  const limits = boundedLimits(input.limits);
+  parseSemVer(input.platformVersion);
+  parseSemVer(input.sdkVersion);
+  const roots = parseRoots(input.roots, limits);
+  const pins = normalizePins(input.pins);
+  const byId = candidateGroups(
+    input.available,
+    limits,
+    input.platformVersion,
+    input.sdkVersion,
+  );
+  const initialConstraints = initialConstraintsFor(roots);
+  const selected = resolveSelectedExtensions(
+    initialConstraints,
+    byId,
+    pins,
+    limits,
+  );
+  const nodes = buildResolutionNodes(selected);
+  const edges = buildResolutionEdges(selected);
+
+  const installed = inspectArray(
+    input.installed ?? [],
+    "installed",
+    limits.maximumPackages,
+  ).map((candidate, index) => parseInstalled(candidate, `installed[${index}]`));
+  const decisions = buildResolutionDecisions(nodes, installed, pins);
   return Object.freeze({
     nodes: Object.freeze(nodes),
     edges: Object.freeze(edges),

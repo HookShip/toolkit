@@ -89,27 +89,11 @@ const CONFIGURATION_SCHEMA_KEYS = [
   "type",
 ] as const;
 
-function validateSchema(
-  value: unknown,
+function normalizeSchemaScalarKeywords(
+  object: Readonly<Record<string, unknown>>,
+  result: Record<string, JsonValue>,
   path: string,
-  depth: number,
-  state: { nodes: number },
-): JsonValue {
-  state.nodes += 1;
-  if (state.nodes > 10_000 || depth > 32) {
-    throw new ExtensionValidationError(
-      "SCHEMA_LIMIT",
-      "Configuration schema exceeds node or depth limits.",
-      path,
-    );
-  }
-  const object = inspectClosedObject(
-    value,
-    path,
-    [],
-    [...CONFIGURATION_SCHEMA_KEYS],
-  );
-  const result = Object.create(null) as Record<string, JsonValue>;
+): void {
   if (object.$schema !== undefined) {
     const schema = expectString(object.$schema, `${path}.$schema`, {
       maximumLength: 256,
@@ -194,6 +178,15 @@ function validateSchema(
     }
     result.additionalProperties = false;
   }
+}
+
+function normalizeSchemaNestedKeywords(
+  object: Readonly<Record<string, unknown>>,
+  result: Record<string, JsonValue>,
+  path: string,
+  depth: number,
+  state: { nodes: number },
+): void {
   if (object.required !== undefined) {
     const required = inspectArray(object.required, `${path}.required`, 256).map(
       (candidate, index) =>
@@ -259,6 +252,12 @@ function validateSchema(
       },
     );
   }
+}
+
+function validateSchemaInvariants(
+  result: Record<string, JsonValue>,
+  path: string,
+): void {
   if (
     (result.type === "object" || result.properties !== undefined) &&
     result.additionalProperties !== false
@@ -291,6 +290,32 @@ function validateSchema(
       `${path}.items`,
     );
   }
+}
+
+function validateSchema(
+  value: unknown,
+  path: string,
+  depth: number,
+  state: { nodes: number },
+): JsonValue {
+  state.nodes += 1;
+  if (state.nodes > 10_000 || depth > 32) {
+    throw new ExtensionValidationError(
+      "SCHEMA_LIMIT",
+      "Configuration schema exceeds node or depth limits.",
+      path,
+    );
+  }
+  const object = inspectClosedObject(
+    value,
+    path,
+    [],
+    [...CONFIGURATION_SCHEMA_KEYS],
+  );
+  const result = Object.create(null) as Record<string, JsonValue>;
+  normalizeSchemaScalarKeywords(object, result, path);
+  normalizeSchemaNestedKeywords(object, result, path, depth, state);
+  validateSchemaInvariants(result, path);
   return Object.freeze(result);
 }
 

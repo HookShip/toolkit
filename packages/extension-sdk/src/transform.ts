@@ -175,6 +175,185 @@ function validateConstant(
   return cloneJson(value as JsonValue);
 }
 
+function parseSelectOperation(
+  value: unknown,
+  path: string,
+  op: "select",
+  limits: ReturnType<typeof boundedLimits>,
+): SelectTransformOperation {
+  const object = inspectClosedObject(value, path, ["op", "paths"]);
+  return Object.freeze({
+    op,
+    paths: normalizePaths(object.paths, `${path}.paths`, limits.maximumDepth),
+  });
+}
+
+function parseDropOperation(
+  value: unknown,
+  path: string,
+  op: "drop",
+  limits: ReturnType<typeof boundedLimits>,
+): DropTransformOperation {
+  const object = inspectClosedObject(value, path, ["op", "paths"]);
+  return Object.freeze({
+    op,
+    paths: normalizePaths(object.paths, `${path}.paths`, limits.maximumDepth),
+  });
+}
+
+function parseRenameOperation(
+  value: unknown,
+  path: string,
+  op: "rename",
+  limits: ReturnType<typeof boundedLimits>,
+): RenameTransformOperation {
+  const object = inspectClosedObject(value, path, ["op", "from", "to"]);
+  const from = normalizeJsonPointer(
+    expectString(object.from, `${path}.from`),
+    `${path}.from`,
+  );
+  const to = normalizeJsonPointer(
+    expectString(object.to, `${path}.to`),
+    `${path}.to`,
+  );
+  parseJsonPointer(from, `${path}.from`, limits.maximumDepth);
+  parseJsonPointer(to, `${path}.to`, limits.maximumDepth);
+  if (from === to || from.startsWith(`${to}/`) || to.startsWith(`${from}/`)) {
+    throw new DeclarativeRuntimeError(
+      "OVERLAPPING_POINTERS",
+      "Rename source and destination must not overlap.",
+      path,
+    );
+  }
+  return Object.freeze({ op, from, to });
+}
+
+function parseSetOperation(
+  value: unknown,
+  path: string,
+  op: "set",
+  limits: ReturnType<typeof boundedLimits>,
+): SetTransformOperation {
+  const object = inspectClosedObject(value, path, ["op", "path", "value"]);
+  const target = normalizeJsonPointer(
+    expectString(object.path, `${path}.path`),
+    `${path}.path`,
+  );
+  parseJsonPointer(target, `${path}.path`, limits.maximumDepth);
+  return Object.freeze({
+    op,
+    path: target,
+    value: validateConstant(object.value, `${path}.value`, limits),
+  });
+}
+
+function parseCoalesceOperation(
+  value: unknown,
+  path: string,
+  op: "coalesce",
+  limits: ReturnType<typeof boundedLimits>,
+): CoalesceTransformOperation {
+  const object = inspectClosedObject(value, path, ["op", "from", "to"]);
+  const to = normalizeJsonPointer(
+    expectString(object.to, `${path}.to`),
+    `${path}.to`,
+  );
+  parseJsonPointer(to, `${path}.to`, limits.maximumDepth);
+  return Object.freeze({
+    op,
+    from: normalizePaths(object.from, `${path}.from`, limits.maximumDepth),
+    to,
+  });
+}
+
+function parseMapEnumOperation(
+  value: unknown,
+  path: string,
+  op: "map-enum",
+  limits: ReturnType<typeof boundedLimits>,
+): MapEnumTransformOperation {
+  const object = inspectClosedObject(
+    value,
+    path,
+    ["op", "path", "map"],
+    ["default"],
+  );
+  const mappings = inspectRecord(object.map, `${path}.map`, {
+    maximumEntries: 256,
+  });
+  const normalizedMap = Object.create(null) as Record<string, JsonValue>;
+  for (const key of Object.keys(mappings).sort(compareUtf16CodeUnits)) {
+    if (key.length === 0 || key.length > 1_024) {
+      throw new DeclarativeRuntimeError(
+        "INVALID_ENUM_KEY",
+        `${path}.map contains an invalid key.`,
+        `${path}.map`,
+      );
+    }
+    normalizedMap[key] = validateConstant(
+      mappings[key],
+      `${path}.map.${key}`,
+      limits,
+    );
+  }
+  const target = normalizeJsonPointer(
+    expectString(object.path, `${path}.path`),
+    `${path}.path`,
+  );
+  parseJsonPointer(target, `${path}.path`, limits.maximumDepth);
+  return Object.freeze({
+    op,
+    path: target,
+    map: Object.freeze(normalizedMap),
+    ...(!Object.hasOwn(object, "default")
+      ? {}
+      : {
+          default: validateConstant(object.default, `${path}.default`, limits),
+        }),
+  });
+}
+
+function parseFormatOperation(
+  value: unknown,
+  path: string,
+  op: "format",
+  limits: ReturnType<typeof boundedLimits>,
+): FormatTransformOperation {
+  const object = inspectClosedObject(value, path, [
+    "op",
+    "to",
+    "template",
+    "variables",
+  ]);
+  const variables = inspectRecord(object.variables, `${path}.variables`, {
+    maximumEntries: 128,
+  });
+  const normalizedVariables = Object.create(null) as Record<string, string>;
+  for (const name of Object.keys(variables).sort(compareUtf16CodeUnits)) {
+    expectIdentifier(name, `${path}.variables key`, 64);
+    const pointer = normalizeJsonPointer(
+      expectString(variables[name], `${path}.variables.${name}`),
+      `${path}.variables.${name}`,
+    );
+    parseJsonPointer(pointer, `${path}.variables.${name}`, limits.maximumDepth);
+    normalizedVariables[name] = pointer;
+  }
+  const to = normalizeJsonPointer(
+    expectString(object.to, `${path}.to`),
+    `${path}.to`,
+  );
+  parseJsonPointer(to, `${path}.to`, limits.maximumDepth);
+  return Object.freeze({
+    op,
+    to,
+    template: expectString(object.template, `${path}.template`, {
+      allowEmpty: true,
+      maximumLength: limits.maximumStringLength,
+    }),
+    variables: Object.freeze(normalizedVariables),
+  });
+}
+
 function parseOperation(
   value: unknown,
   index: number,
@@ -207,163 +386,20 @@ function parseOperation(
     "set",
   ] as const);
   switch (op) {
-    case "select": {
-      const object = inspectClosedObject(value, path, ["op", "paths"]);
-      return Object.freeze({
-        op,
-        paths: normalizePaths(
-          object.paths,
-          `${path}.paths`,
-          limits.maximumDepth,
-        ),
-      });
-    }
-    case "drop": {
-      const object = inspectClosedObject(value, path, ["op", "paths"]);
-      return Object.freeze({
-        op,
-        paths: normalizePaths(
-          object.paths,
-          `${path}.paths`,
-          limits.maximumDepth,
-        ),
-      });
-    }
-    case "rename": {
-      const object = inspectClosedObject(value, path, ["op", "from", "to"]);
-      const from = normalizeJsonPointer(
-        expectString(object.from, `${path}.from`),
-        `${path}.from`,
-      );
-      const to = normalizeJsonPointer(
-        expectString(object.to, `${path}.to`),
-        `${path}.to`,
-      );
-      parseJsonPointer(from, `${path}.from`, limits.maximumDepth);
-      parseJsonPointer(to, `${path}.to`, limits.maximumDepth);
-      if (
-        from === to ||
-        from.startsWith(`${to}/`) ||
-        to.startsWith(`${from}/`)
-      ) {
-        throw new DeclarativeRuntimeError(
-          "OVERLAPPING_POINTERS",
-          "Rename source and destination must not overlap.",
-          path,
-        );
-      }
-      return Object.freeze({ op, from, to });
-    }
-    case "set": {
-      const object = inspectClosedObject(value, path, ["op", "path", "value"]);
-      const target = normalizeJsonPointer(
-        expectString(object.path, `${path}.path`),
-        `${path}.path`,
-      );
-      parseJsonPointer(target, `${path}.path`, limits.maximumDepth);
-      return Object.freeze({
-        op,
-        path: target,
-        value: validateConstant(object.value, `${path}.value`, limits),
-      });
-    }
-    case "coalesce": {
-      const object = inspectClosedObject(value, path, ["op", "from", "to"]);
-      const to = normalizeJsonPointer(
-        expectString(object.to, `${path}.to`),
-        `${path}.to`,
-      );
-      parseJsonPointer(to, `${path}.to`, limits.maximumDepth);
-      return Object.freeze({
-        op,
-        from: normalizePaths(object.from, `${path}.from`, limits.maximumDepth),
-        to,
-      });
-    }
-    case "map-enum": {
-      const object = inspectClosedObject(
-        value,
-        path,
-        ["op", "path", "map"],
-        ["default"],
-      );
-      const mappings = inspectRecord(object.map, `${path}.map`, {
-        maximumEntries: 256,
-      });
-      const normalizedMap = Object.create(null) as Record<string, JsonValue>;
-      for (const key of Object.keys(mappings).sort(compareUtf16CodeUnits)) {
-        if (key.length === 0 || key.length > 1_024) {
-          throw new DeclarativeRuntimeError(
-            "INVALID_ENUM_KEY",
-            `${path}.map contains an invalid key.`,
-            `${path}.map`,
-          );
-        }
-        normalizedMap[key] = validateConstant(
-          mappings[key],
-          `${path}.map.${key}`,
-          limits,
-        );
-      }
-      const target = normalizeJsonPointer(
-        expectString(object.path, `${path}.path`),
-        `${path}.path`,
-      );
-      parseJsonPointer(target, `${path}.path`, limits.maximumDepth);
-      return Object.freeze({
-        op,
-        path: target,
-        map: Object.freeze(normalizedMap),
-        ...(!Object.hasOwn(object, "default")
-          ? {}
-          : {
-              default: validateConstant(
-                object.default,
-                `${path}.default`,
-                limits,
-              ),
-            }),
-      });
-    }
-    case "format": {
-      const object = inspectClosedObject(value, path, [
-        "op",
-        "to",
-        "template",
-        "variables",
-      ]);
-      const variables = inspectRecord(object.variables, `${path}.variables`, {
-        maximumEntries: 128,
-      });
-      const normalizedVariables = Object.create(null) as Record<string, string>;
-      for (const name of Object.keys(variables).sort(compareUtf16CodeUnits)) {
-        expectIdentifier(name, `${path}.variables key`, 64);
-        const pointer = normalizeJsonPointer(
-          expectString(variables[name], `${path}.variables.${name}`),
-          `${path}.variables.${name}`,
-        );
-        parseJsonPointer(
-          pointer,
-          `${path}.variables.${name}`,
-          limits.maximumDepth,
-        );
-        normalizedVariables[name] = pointer;
-      }
-      const to = normalizeJsonPointer(
-        expectString(object.to, `${path}.to`),
-        `${path}.to`,
-      );
-      parseJsonPointer(to, `${path}.to`, limits.maximumDepth);
-      return Object.freeze({
-        op,
-        to,
-        template: expectString(object.template, `${path}.template`, {
-          allowEmpty: true,
-          maximumLength: limits.maximumStringLength,
-        }),
-        variables: Object.freeze(normalizedVariables),
-      });
-    }
+    case "select":
+      return parseSelectOperation(value, path, op, limits);
+    case "drop":
+      return parseDropOperation(value, path, op, limits);
+    case "rename":
+      return parseRenameOperation(value, path, op, limits);
+    case "set":
+      return parseSetOperation(value, path, op, limits);
+    case "coalesce":
+      return parseCoalesceOperation(value, path, op, limits);
+    case "map-enum":
+      return parseMapEnumOperation(value, path, op, limits);
+    case "format":
+      return parseFormatOperation(value, path, op, limits);
   }
 }
 

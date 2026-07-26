@@ -323,6 +323,46 @@ function error(
   });
 }
 
+function finalizeSignatureVerification(
+  policy: ReturnType<typeof normalizeTrustPolicy>,
+  errors: SignatureVerificationError[],
+  valid: Set<string>,
+): SignatureVerificationResult {
+  for (const requiredKeyId of policy.requiredKeyIds) {
+    if (!valid.has(requiredKeyId)) {
+      errors.push(
+        error(
+          "REQUIRED_KEY_MISSING",
+          "A required signing key did not provide a valid signature.",
+          requiredKeyId,
+        ),
+      );
+    }
+  }
+  if (valid.size < policy.minimumSignatures) {
+    errors.push(
+      error(
+        "THRESHOLD_NOT_MET",
+        `Only ${valid.size} valid signature(s) satisfied a threshold of ${policy.minimumSignatures}.`,
+      ),
+    );
+  }
+  const blockingUnknown =
+    policy.rejectUnknownSignatures &&
+    errors.some((candidate) => candidate.code === "UNKNOWN_KEY");
+  const requiredMissing = errors.some(
+    (candidate) => candidate.code === "REQUIRED_KEY_MISSING",
+  );
+  return Object.freeze({
+    ok:
+      valid.size >= policy.minimumSignatures &&
+      !blockingUnknown &&
+      !requiredMissing,
+    errors: Object.freeze(errors),
+    validKeyIds: Object.freeze([...valid].sort()),
+  });
+}
+
 export function verifyBundleDigestSignatures(
   digest: string,
   signaturesInput: readonly BundleSignature[],
@@ -444,37 +484,5 @@ export function verifyBundleDigestSignatures(
     valid.add(signature.keyId);
   }
 
-  for (const requiredKeyId of policy.requiredKeyIds) {
-    if (!valid.has(requiredKeyId)) {
-      errors.push(
-        error(
-          "REQUIRED_KEY_MISSING",
-          "A required signing key did not provide a valid signature.",
-          requiredKeyId,
-        ),
-      );
-    }
-  }
-  if (valid.size < policy.minimumSignatures) {
-    errors.push(
-      error(
-        "THRESHOLD_NOT_MET",
-        `Only ${valid.size} valid signature(s) satisfied a threshold of ${policy.minimumSignatures}.`,
-      ),
-    );
-  }
-  const blockingUnknown =
-    policy.rejectUnknownSignatures &&
-    errors.some((candidate) => candidate.code === "UNKNOWN_KEY");
-  const requiredMissing = errors.some(
-    (candidate) => candidate.code === "REQUIRED_KEY_MISSING",
-  );
-  return Object.freeze({
-    ok:
-      valid.size >= policy.minimumSignatures &&
-      !blockingUnknown &&
-      !requiredMissing,
-    errors: Object.freeze(errors),
-    validKeyIds: Object.freeze([...valid].sort()),
-  });
+  return finalizeSignatureVerification(policy, errors, valid);
 }

@@ -537,50 +537,11 @@ function referencedPaths(entry: ExtensionEntry): readonly string[] {
   }
 }
 
-function parseManifestBase(
-  value: unknown,
-  complete: boolean,
-): ExtensionManifest | ExtensionManifestDraft {
-  const required = [
-    "manifestVersion",
-    "kind",
-    "identity",
-    "compatibility",
-    "capabilities",
-    "permissions",
-    "resources",
-    "entry",
-    "provenance",
-  ];
-  if (complete) {
-    required.push("integrity");
-  }
-  const object = inspectClosedObject(value, "manifest", required);
-  const manifestVersion = expectEnum(
-    object.manifestVersion,
-    "manifest.manifestVersion",
-    [EXTENSION_MANIFEST_VERSION] as const,
-  );
-  const kind = expectEnum(object.kind, "manifest.kind", EXTENSION_KINDS);
-  const identity = parseIdentity(object.identity);
-  const compatibility = parseCompatibility(object.compatibility);
-  if (
-    compatibility.dependencies.some(
-      (dependency) => dependency.id === identity.id,
-    ) ||
-    compatibility.conflicts.some((conflict) => conflict.id === identity.id)
-  ) {
-    throw new ExtensionValidationError(
-      "SELF_REFERENCE",
-      "Extension must not depend on or conflict with itself.",
-      "manifest.compatibility",
-    );
-  }
-  const capabilities = parseCapabilities(object.capabilities, kind);
-  const permissions = normalizePermissionSet(object.permissions);
-  const resources = parseResources(object.resources, complete);
-  const entry = parseEntry(object.entry, kind);
-  const provenance = parseProvenance(object.provenance);
+function validateEntryResources(
+  entry: ExtensionEntry,
+  resources: readonly (ExtensionResource | ResourceDeclaration)[],
+  capabilities: readonly ExtensionCapability[],
+): void {
   const resourcePaths = new Set(resources.map((resource) => resource.path));
   for (const path of referencedPaths(entry)) {
     if (!resourcePaths.has(path)) {
@@ -656,20 +617,15 @@ function parseManifestBase(
       }
       break;
   }
-  const base = {
-    manifestVersion,
-    kind,
-    identity,
-    compatibility,
-    capabilities,
-    permissions,
-    resources,
-    entry,
-    provenance,
-  };
-  if (!complete) {
-    return Object.freeze(base) as ExtensionManifestDraft;
-  }
+}
+
+function parseManifestIntegrity(
+  object: Readonly<Record<string, unknown>>,
+  base: Omit<ExtensionManifestDraft, "resources"> & {
+    readonly resources: readonly (ExtensionResource | ResourceDeclaration)[];
+  },
+  resources: readonly (ExtensionResource | ResourceDeclaration)[],
+): ExtensionManifest {
   const integrityObject = inspectClosedObject(
     object.integrity,
     "manifest.integrity",
@@ -723,6 +679,68 @@ function parseManifestBase(
       ),
     }),
   }) as ExtensionManifest;
+}
+
+function parseManifestBase(
+  value: unknown,
+  complete: boolean,
+): ExtensionManifest | ExtensionManifestDraft {
+  const required = [
+    "manifestVersion",
+    "kind",
+    "identity",
+    "compatibility",
+    "capabilities",
+    "permissions",
+    "resources",
+    "entry",
+    "provenance",
+  ];
+  if (complete) {
+    required.push("integrity");
+  }
+  const object = inspectClosedObject(value, "manifest", required);
+  const manifestVersion = expectEnum(
+    object.manifestVersion,
+    "manifest.manifestVersion",
+    [EXTENSION_MANIFEST_VERSION] as const,
+  );
+  const kind = expectEnum(object.kind, "manifest.kind", EXTENSION_KINDS);
+  const identity = parseIdentity(object.identity);
+  const compatibility = parseCompatibility(object.compatibility);
+  if (
+    compatibility.dependencies.some(
+      (dependency) => dependency.id === identity.id,
+    ) ||
+    compatibility.conflicts.some((conflict) => conflict.id === identity.id)
+  ) {
+    throw new ExtensionValidationError(
+      "SELF_REFERENCE",
+      "Extension must not depend on or conflict with itself.",
+      "manifest.compatibility",
+    );
+  }
+  const capabilities = parseCapabilities(object.capabilities, kind);
+  const permissions = normalizePermissionSet(object.permissions);
+  const resources = parseResources(object.resources, complete);
+  const entry = parseEntry(object.entry, kind);
+  const provenance = parseProvenance(object.provenance);
+  validateEntryResources(entry, resources, capabilities);
+  const base = {
+    manifestVersion,
+    kind,
+    identity,
+    compatibility,
+    capabilities,
+    permissions,
+    resources,
+    entry,
+    provenance,
+  };
+  if (!complete) {
+    return Object.freeze(base) as ExtensionManifestDraft;
+  }
+  return parseManifestIntegrity(object, base, resources);
 }
 
 export function parseExtensionManifest(value: unknown): ExtensionManifest {
