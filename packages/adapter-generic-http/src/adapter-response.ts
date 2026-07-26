@@ -418,25 +418,14 @@ export async function interpretGenericHttpResponse(
     command.kind === "metadata.poll" ||
     command.kind === "metadata.backfill"
   ) {
-    if (response.status === 202) {
-      return degradedResult("The metadata query is pending.", {
-        retryable: true,
-        sideEffects: "none",
-      }) as AdapterCommandResult;
-    }
-    const value = metadataResult(
-      parsed,
+    return interpretMetadataHttpResponse(
+      context,
       command,
-      context.capabilityDocument.adapter.id,
-      context.limits.maxMetadataRecords,
+      route,
+      response,
+      parsed,
+      capabilityStatus,
     );
-    return capabilityStatus === "degraded"
-      ? (degradedResult(route.degradedReason ?? "The route is degraded.", {
-          value,
-          retryable: false,
-          sideEffects: "none",
-        }) as AdapterCommandResult)
-      : (okResult(value, { sideEffects: "none" }) as AdapterCommandResult);
   }
 
   if (response.status === 204 || parsed === undefined) {
@@ -451,6 +440,64 @@ export async function interpretGenericHttpResponse(
           retryable: true,
         });
   }
+  return interpretAcknowledgementHttpResponse(
+    context,
+    command,
+    route,
+    envelope,
+    response,
+    parsed,
+    capabilityStatus,
+    sideEffecting,
+    signal,
+    deadlineAt,
+  );
+}
+
+function interpretMetadataHttpResponse(
+  context: GenericHttpInterpretContext,
+  command: Extract<
+    AdapterCommand,
+    { readonly kind: "metadata.backfill" | "metadata.poll" }
+  >,
+  route: GenericHttpRoute,
+  response: HttpTransportResponse,
+  parsed: unknown,
+  capabilityStatus: "degraded" | "supported",
+): AdapterCommandResult {
+  if (response.status === 202) {
+    return degradedResult("The metadata query is pending.", {
+      retryable: true,
+      sideEffects: "none",
+    }) as AdapterCommandResult;
+  }
+  const value = metadataResult(
+    parsed,
+    command,
+    context.capabilityDocument.adapter.id,
+    context.limits.maxMetadataRecords,
+  );
+  return capabilityStatus === "degraded"
+    ? (degradedResult(route.degradedReason ?? "The route is degraded.", {
+        value,
+        retryable: false,
+        sideEffects: "none",
+      }) as AdapterCommandResult)
+    : (okResult(value, { sideEffects: "none" }) as AdapterCommandResult);
+}
+
+async function interpretAcknowledgementHttpResponse(
+  context: GenericHttpInterpretContext,
+  command: AdapterCommand,
+  route: GenericHttpRoute,
+  envelope: AuthenticatedCommandEnvelope,
+  response: HttpTransportResponse,
+  parsed: unknown,
+  capabilityStatus: "degraded" | "supported",
+  sideEffecting: boolean,
+  signal: AbortSignal,
+  deadlineAt: number,
+): Promise<AdapterCommandResult> {
   const mappingVersion =
     route.mappingVersion ?? DEFAULT_ADAPTER_MAPPING_VERSION;
   const boundResourceId = expectedResourceId(command);

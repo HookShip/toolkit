@@ -41,10 +41,82 @@ interface GenericHttpPreflightContext {
   >;
 }
 
+type PreflightRejection<TCommand extends AdapterCommand> = {
+  readonly ok: false;
+  readonly result: AdapterResultFor<TCommand>;
+};
+
+type CredentialPreflight<TCommand extends AdapterCommand> =
+  | PreflightRejection<TCommand>
+  | {
+      readonly ok: true;
+      readonly credential: ScopedCredential;
+    };
+
+type SideEffectingPreflight<TCommand extends AdapterCommand> =
+  | PreflightRejection<TCommand>
+  | {
+      readonly ok: true;
+      readonly localFingerprint: string | undefined;
+      readonly localScopeReason: string | undefined;
+    };
+
+type CapabilityRoutePreflight<TCommand extends AdapterCommand> =
+  | PreflightRejection<TCommand>
+  | {
+      readonly ok: true;
+      readonly capability: AdapterCapability & {
+        readonly status: "degraded" | "supported";
+      };
+      readonly route: GenericHttpRoute;
+    };
+
 export async function genericHttpPreflight<TCommand extends AdapterCommand>(
   context: GenericHttpPreflightContext,
   command: TCommand,
 ): Promise<PreflightOutcome<TCommand>> {
+  const credentialPreflight = validateGenericHttpPreflightCredential(
+    context,
+    command,
+  );
+  if (!credentialPreflight.ok) {
+    return credentialPreflight;
+  }
+  const { credential } = credentialPreflight;
+  const sideEffectingPreflight = await validateSideEffectingPreflight(
+    context,
+    command,
+    credential,
+  );
+  if (!sideEffectingPreflight.ok) {
+    return sideEffectingPreflight;
+  }
+  const { localFingerprint, localScopeReason } = sideEffectingPreflight;
+  const capabilityRoute = validateCapabilityRoutePreflight(
+    context,
+    command,
+    credential,
+    localScopeReason,
+  );
+  if (!capabilityRoute.ok) {
+    return capabilityRoute;
+  }
+  const { capability, route } = capabilityRoute;
+  return {
+    ok: true,
+    credential,
+    capability,
+    route,
+    localFingerprint,
+  };
+}
+
+function validateGenericHttpPreflightCredential<
+  TCommand extends AdapterCommand,
+>(
+  context: GenericHttpPreflightContext,
+  command: TCommand,
+): CredentialPreflight<TCommand> {
   if (!operationSet.has(command.kind)) {
     return {
       ok: false,
@@ -103,6 +175,14 @@ export async function genericHttpPreflight<TCommand extends AdapterCommand>(
       }) as AdapterResultFor<TCommand>,
     };
   }
+  return { ok: true, credential };
+}
+
+async function validateSideEffectingPreflight<TCommand extends AdapterCommand>(
+  context: GenericHttpPreflightContext,
+  command: TCommand,
+  credential: ScopedCredential,
+): Promise<SideEffectingPreflight<TCommand>> {
   const sideEffecting = isSideEffectingOperation(command.kind);
   let localFingerprint: string | undefined;
   let localScopeReason: string | undefined;
@@ -194,7 +274,15 @@ export async function genericHttpPreflight<TCommand extends AdapterCommand>(
       }
     }
   }
+  return { ok: true, localFingerprint, localScopeReason };
+}
 
+function validateCapabilityRoutePreflight<TCommand extends AdapterCommand>(
+  context: GenericHttpPreflightContext,
+  command: TCommand,
+  credential: ScopedCredential,
+  localScopeReason: string | undefined,
+): CapabilityRoutePreflight<TCommand> {
   const capability = context.capabilityDocument.capabilities[command.kind];
   if (capability.status === "unsupported") {
     return {
@@ -248,12 +336,10 @@ export async function genericHttpPreflight<TCommand extends AdapterCommand>(
   }
   return {
     ok: true,
-    credential,
     // The unsupported branch above returned early, so the status is narrowed.
     capability: capability as AdapterCapability & {
       readonly status: "degraded" | "supported";
     },
     route,
-    localFingerprint,
   };
 }

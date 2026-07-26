@@ -323,6 +323,40 @@ function validateCapabilityStructure(
 }
 
 function validateCapabilityDocumentValue(document: unknown): readonly string[] {
+  const structure = validateCapabilityDocumentStructure(document);
+  if (!structure.ok) {
+    return Object.freeze(structure.issues);
+  }
+  return validateCapabilityDocumentSemantics(
+    structure.topLevel,
+    structure.operationCapabilities,
+    structure.indexedCapabilities,
+  );
+}
+
+type CapabilityRecord = Readonly<Record<string, unknown>>;
+
+type CapabilityDocumentStructure =
+  | {
+      readonly ok: false;
+      readonly issues: readonly string[];
+    }
+  | {
+      readonly ok: true;
+      readonly topLevel: CapabilityRecord;
+      readonly operationCapabilities: ReadonlyMap<
+        AdapterOperation,
+        CapabilityRecord
+      >;
+      readonly indexedCapabilities: ReadonlyMap<
+        AdapterOperation,
+        CapabilityRecord
+      >;
+    };
+
+function validateCapabilityDocumentStructure(
+  document: unknown,
+): CapabilityDocumentStructure {
   const structuralIssues: string[] = [];
   const topLevel = inspectClosedObject(
     document,
@@ -340,7 +374,7 @@ function validateCapabilityDocumentValue(document: unknown): readonly string[] {
     structuralIssues,
   );
   if (topLevel === undefined) {
-    return Object.freeze(structuralIssues);
+    return { ok: false, issues: Object.freeze(structuralIssues) };
   }
   if (topLevel["$schema"] !== ADAPTER_CAPABILITY_SCHEMA_ID) {
     structuralIssues.push(
@@ -357,45 +391,7 @@ function validateCapabilityDocumentValue(document: unknown): readonly string[] {
     structuralIssues.push("The capability document SDK version is invalid.");
   }
 
-  const adapter = inspectClosedObject(
-    topLevel["adapter"],
-    "The capability document adapter",
-    ["id", "name", "version"],
-    ["homepage", "vendor"],
-    structuralIssues,
-  );
-  if (adapter !== undefined) {
-    for (const field of ["id", "name", "version"] as const) {
-      validateSafeString(
-        adapter[field],
-        `The capability document adapter.${field}`,
-        maximumIdentityLength,
-        structuralIssues,
-      );
-    }
-    for (const field of ["homepage", "vendor"] as const) {
-      if (Object.hasOwn(adapter, field)) {
-        validateSafeString(
-          adapter[field],
-          `The capability document adapter.${field}`,
-          maximumIdentityLength,
-          structuralIssues,
-          true,
-        );
-      }
-    }
-  }
-  if (
-    Object.hasOwn(topLevel, "generatedAt") &&
-    !validateSafeString(
-      topLevel["generatedAt"],
-      "The capability document generatedAt",
-      128,
-      structuralIssues,
-    )
-  ) {
-    // validateSafeString records the structural issue.
-  }
+  validateCapabilityDocumentAdapter(topLevel, structuralIssues);
 
   const operationEntries = inspectArray(
     topLevel["operations"],
@@ -470,9 +466,66 @@ function validateCapabilityDocumentValue(document: unknown): readonly string[] {
   }
 
   if (structuralIssues.length > 0) {
-    return Object.freeze(structuralIssues);
+    return { ok: false, issues: Object.freeze(structuralIssues) };
   }
+  return {
+    ok: true,
+    topLevel,
+    operationCapabilities,
+    indexedCapabilities,
+  };
+}
 
+function validateCapabilityDocumentAdapter(
+  topLevel: CapabilityRecord,
+  structuralIssues: string[],
+): void {
+  const adapter = inspectClosedObject(
+    topLevel["adapter"],
+    "The capability document adapter",
+    ["id", "name", "version"],
+    ["homepage", "vendor"],
+    structuralIssues,
+  );
+  if (adapter !== undefined) {
+    for (const field of ["id", "name", "version"] as const) {
+      validateSafeString(
+        adapter[field],
+        `The capability document adapter.${field}`,
+        maximumIdentityLength,
+        structuralIssues,
+      );
+    }
+    for (const field of ["homepage", "vendor"] as const) {
+      if (Object.hasOwn(adapter, field)) {
+        validateSafeString(
+          adapter[field],
+          `The capability document adapter.${field}`,
+          maximumIdentityLength,
+          structuralIssues,
+          true,
+        );
+      }
+    }
+  }
+  if (
+    Object.hasOwn(topLevel, "generatedAt") &&
+    !validateSafeString(
+      topLevel["generatedAt"],
+      "The capability document generatedAt",
+      128,
+      structuralIssues,
+    )
+  ) {
+    // validateSafeString records the structural issue.
+  }
+}
+
+function validateCapabilityDocumentSemantics(
+  topLevel: CapabilityRecord,
+  operationCapabilities: ReadonlyMap<AdapterOperation, CapabilityRecord>,
+  indexedCapabilities: ReadonlyMap<AdapterOperation, CapabilityRecord>,
+): readonly string[] {
   const issues: string[] = [];
   if (
     typeof topLevel["generatedAt"] === "string" &&

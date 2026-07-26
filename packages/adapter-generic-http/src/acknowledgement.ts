@@ -43,7 +43,6 @@ export type ProviderAcknowledgementResult =
       readonly kind: "replay";
       readonly replayId?: string;
     };
-
 export interface ProviderAcknowledgementContent {
   readonly commandFingerprint: string;
   readonly connectionId: string;
@@ -62,16 +61,20 @@ export interface ProviderAcknowledgementContent {
   readonly schemaVersion: typeof PROVIDER_ACKNOWLEDGEMENT_SCHEMA_VERSION;
   readonly tenantId: string;
 }
-
 export interface AuthenticatedProviderAcknowledgement extends ProviderAcknowledgementContent {
   readonly signature: {
     readonly algorithm: typeof PROVIDER_ACKNOWLEDGEMENT_SIGNATURE_ALGORITHM;
     readonly value: string;
   };
 }
-
 export type ProviderAcknowledgement = AuthenticatedProviderAcknowledgement;
-
+interface VerifyProviderAcknowledgementOptions {
+  readonly maximumClockSkewMilliseconds?: number;
+  readonly maximumLifetimeMilliseconds?: number;
+  readonly deadlineAt?: number;
+  readonly now?: number;
+  readonly signal?: AbortSignal;
+}
 export interface AcknowledgementBinding {
   readonly adapterId: string;
   readonly commandFingerprint: string;
@@ -84,14 +87,12 @@ export interface AcknowledgementBinding {
   readonly requestNonce: string;
   readonly tenantId: string;
 }
-
 export interface CreateProviderAcknowledgementOptions {
   readonly expiresAt?: number;
   readonly issuedAt?: number;
   readonly maximumLifetimeMilliseconds?: number;
   readonly nonce?: string;
 }
-
 export interface AcknowledgementReplayInput {
   readonly commandFingerprint: string;
   readonly credentialId: string;
@@ -101,7 +102,6 @@ export interface AcknowledgementReplayInput {
   readonly requestNonce: string;
   readonly signal: AbortSignal;
 }
-
 /**
  * consume must atomically return true only for the first observation. Durable
  * implementations should be shared by all adapter instances.
@@ -109,7 +109,6 @@ export interface AcknowledgementReplayInput {
 export interface AcknowledgementReplayStore {
   consume(input: AcknowledgementReplayInput): Promise<boolean>;
 }
-
 export interface InMemoryAcknowledgementReplayStoreOptions {
   readonly clock?: () => number;
   readonly maxEntries?: number;
@@ -642,13 +641,7 @@ export async function verifyProviderAcknowledgement(
   binding: AcknowledgementBinding,
   credential: ScopedCredential,
   replayStore: AcknowledgementReplayStore,
-  options: {
-    readonly maximumClockSkewMilliseconds?: number;
-    readonly maximumLifetimeMilliseconds?: number;
-    readonly deadlineAt?: number;
-    readonly now?: number;
-    readonly signal?: AbortSignal;
-  } = {},
+  options: VerifyProviderAcknowledgementOptions = {},
 ): Promise<AcknowledgementVerificationResult> {
   const acknowledgement = parseAcknowledgement(value, binding);
   if (acknowledgement === undefined) {
@@ -712,7 +705,32 @@ export async function verifyProviderAcknowledgement(
       "The acknowledgement credential is outside its response scope.",
     );
   }
-  let firstObservation: boolean;
+  try {
+    const firstObservation = await consumeAcknowledgementFirstObservation(
+      acknowledgement,
+      replayStore,
+      options,
+    );
+    if (!firstObservation) {
+      return failure(
+        "acknowledgement.replayed",
+        "The provider acknowledgement was already consumed.",
+      );
+    }
+  } catch {
+    return failure(
+      "acknowledgement.replay_store_unavailable",
+      "The acknowledgement replay store is unavailable.",
+    );
+  }
+  return Object.freeze({ ok: true, acknowledgement });
+}
+
+async function consumeAcknowledgementFirstObservation(
+  acknowledgement: AuthenticatedProviderAcknowledgement,
+  replayStore: AcknowledgementReplayStore,
+  options: VerifyProviderAcknowledgementOptions,
+): Promise<boolean> {
   const replayDeadlineAt = Math.min(
     options.deadlineAt ?? acknowledgement.expiresAt,
     acknowledgement.expiresAt,
@@ -736,7 +754,7 @@ export async function verifyProviderAcknowledgement(
       deadlineAt: replayDeadlineAt,
       signal: replayDeadline.signal,
     });
-    firstObservation = await new Promise<boolean>((resolve, reject) => {
+    return await new Promise<boolean>((resolve, reject) => {
       let settled = false;
       const finish = (callback: () => void): void => {
         if (!settled) {
@@ -776,19 +794,7 @@ export async function verifyProviderAcknowledgement(
           ),
       );
     });
-  } catch {
-    return failure(
-      "acknowledgement.replay_store_unavailable",
-      "The acknowledgement replay store is unavailable.",
-    );
   } finally {
     replayDeadline.dispose();
   }
-  if (!firstObservation) {
-    return failure(
-      "acknowledgement.replayed",
-      "The provider acknowledgement was already consumed.",
-    );
-  }
-  return Object.freeze({ ok: true, acknowledgement });
 }
