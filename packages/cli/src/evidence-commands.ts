@@ -25,6 +25,7 @@ import {
   booleanOption,
   parseCommandArguments,
   stringOption,
+  type ParsedCommandArguments,
 } from "./arguments.js";
 import {
   CliCommandError,
@@ -357,10 +358,24 @@ function forbiddenLiteralKeyArgument(args: readonly string[]): boolean {
   );
 }
 
-export async function supportEvidenceCommand(
+interface SupportEvidenceInputs {
+  readonly keyId: string | undefined;
+  readonly parsed: ParsedCommandArguments;
+  readonly scopePath: string;
+  readonly signingKeyPath: string | undefined;
+  readonly timelinePath: string;
+}
+
+interface EvidenceSelection {
+  readonly from: string;
+  readonly scope: unknown;
+  readonly selected: readonly EvidenceCandidate[];
+  readonly to: string;
+}
+
+function parseSupportEvidenceInputs(
   args: readonly string[],
-  dependencies: CliDependencies,
-): Promise<CliExitCode> {
+): SupportEvidenceInputs {
   if (forbiddenLiteralKeyArgument(args)) {
     throw new CliCommandError(
       CLI_EXIT_CODES.usage,
@@ -403,7 +418,15 @@ export async function supportEvidenceCommand(
     { name: "timeline", usesStdin: timelinePath === "-" },
     { name: "scope", usesStdin: scopePath === "-" },
   ]);
+  return { keyId, parsed, scopePath, signingKeyPath, timelinePath };
+}
 
+async function selectEvidenceRecords(
+  parsed: ParsedCommandArguments,
+  timelinePath: string,
+  scopePath: string,
+  dependencies: CliDependencies,
+): Promise<EvidenceSelection> {
   const timeline = await readStructuredInput(
     timelinePath,
     "support timeline",
@@ -454,6 +477,10 @@ export async function supportEvidenceCommand(
     );
   }
   assertScopeMatches(scope, selected);
+  return { from, scope, selected, to };
+}
+
+function evidenceCommandNow(dependencies: CliDependencies): Date {
   const now = dependencies.now?.() ?? new Date();
   if (!Number.isFinite(now.valueOf())) {
     throw new CliCommandError(
@@ -462,11 +489,18 @@ export async function supportEvidenceCommand(
       "The command clock returned an invalid time.",
     );
   }
-  const createdAt = now.toISOString();
-  const expiresAt =
-    optionTimestamp(parsed.values, "expires-at") ??
-    new Date(now.valueOf() + DEFAULT_EVIDENCE_LIFETIME_MS).toISOString();
+  return now;
+}
 
+function createSupportEvidenceBundle(
+  parsed: ParsedCommandArguments,
+  scope: unknown,
+  selected: readonly EvidenceCandidate[],
+  from: string,
+  to: string,
+  createdAt: string,
+  expiresAt: string,
+): EvidenceBundle {
   const groupedSources = new Map<
     string,
     { readonly material: unknown[]; count: number }
@@ -488,9 +522,8 @@ export async function supportEvidenceCommand(
       ]),
     ).values(),
   ];
-  let bundle: EvidenceBundle;
   try {
-    bundle = createEvidenceBundle({
+    return createEvidenceBundle({
       supportCaseId: requiredOption(parsed.values, "case-id"),
       tenantScope: scope,
       selection: {
@@ -534,6 +567,15 @@ export async function supportEvidenceCommand(
     }
     throw error;
   }
+}
+
+async function signSupportEvidenceBundle(
+  bundle: EvidenceBundle,
+  signingKeyPath: string | undefined,
+  keyId: string | undefined,
+  dependencies: CliDependencies,
+  createdAt: string,
+): Promise<EvidenceBundle> {
   if (signingKeyPath !== undefined && keyId !== undefined) {
     const privateKey = await readKeyFile(
       signingKeyPath,
@@ -541,7 +583,7 @@ export async function supportEvidenceCommand(
       "private",
     );
     try {
-      bundle = signEvidenceBundle(bundle, {
+      return signEvidenceBundle(bundle, {
         keyId,
         privateKey,
         signedAt: createdAt,
@@ -558,6 +600,14 @@ export async function supportEvidenceCommand(
       throw error;
     }
   }
+  return bundle;
+}
+
+async function emitSupportEvidenceBundle(
+  parsed: ParsedCommandArguments,
+  dependencies: CliDependencies,
+  bundle: EvidenceBundle,
+): Promise<void> {
   const format = artifactFormat(parsed.values, "json");
   const signatureStatus =
     bundle.signature === undefined ? "unsigned" : "signed";
@@ -579,5 +629,41 @@ export async function supportEvidenceCommand(
     json: booleanOption(parsed.values, "json"),
     ...(outputPath === undefined ? {} : { outputPath }),
   });
+}
+
+export async function supportEvidenceCommand(
+  args: readonly string[],
+  dependencies: CliDependencies,
+): Promise<CliExitCode> {
+  const { keyId, parsed, scopePath, signingKeyPath, timelinePath } =
+    parseSupportEvidenceInputs(args);
+  const { from, scope, selected, to } = await selectEvidenceRecords(
+    parsed,
+    timelinePath,
+    scopePath,
+    dependencies,
+  );
+  const now = evidenceCommandNow(dependencies);
+  const createdAt = now.toISOString();
+  const expiresAt =
+    optionTimestamp(parsed.values, "expires-at") ??
+    new Date(now.valueOf() + DEFAULT_EVIDENCE_LIFETIME_MS).toISOString();
+
+  const bundle = await signSupportEvidenceBundle(
+    createSupportEvidenceBundle(
+      parsed,
+      scope,
+      selected,
+      from,
+      to,
+      createdAt,
+      expiresAt,
+    ),
+    signingKeyPath,
+    keyId,
+    dependencies,
+    createdAt,
+  );
+  await emitSupportEvidenceBundle(parsed, dependencies, bundle);
   return CLI_EXIT_CODES.success;
 }

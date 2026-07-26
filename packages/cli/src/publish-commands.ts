@@ -159,38 +159,13 @@ function emitPublishedRelease(
   );
 }
 
-export async function publishCommand(
-  args: readonly string[],
+function handlePublishPreflight(
+  preflight: JsonHttpResponse,
   dependencies: CliDependencies,
-): Promise<CliExitCode> {
-  const parsed = parseCommandArguments(args, {
-    ...SERVER_OPTIONS,
-    "idempotency-key": { type: "string" },
-    "override-reason": { type: "string" },
-  });
-  ensurePositionals(parsed.positionals, 1);
-  const input = parsed.positionals[0]!;
-  const { source, result } = await readContract(input, dependencies);
-  const contract = requireValidContract(result);
-  const server =
-    stringOption(parsed.values, "server") ?? "http://127.0.0.1:3210";
-  const headers = await apiTokenHeaders(parsed.values, dependencies);
-  const overrideReason = normalizedOverrideReason(parsed.values);
-  const requestFingerprint = publishRequestFingerprint(
-    contract.checksum.value,
-    overrideReason,
-  );
-  const publishIdempotencyKey =
-    stringOption(parsed.values, "idempotency-key") ??
-    `publish_${requestFingerprint}`;
-  const json = booleanOption(parsed.values, "json");
-
-  const preflight = await requestPublishStatus(
-    server,
-    headers,
-    publishIdempotencyKey,
-    dependencies,
-  );
+  json: boolean,
+  publishIdempotencyKey: string,
+  requestFingerprint: string,
+): CliExitCode | undefined {
   if (preflight.status !== 404) {
     if (preflight.status < 200 || preflight.status >= 300) {
       throw serverError(preflight);
@@ -223,7 +198,17 @@ export async function publishCommand(
         : undefined,
     );
   }
+  return undefined;
+}
 
+async function importContractForPublish(
+  server: string,
+  headers: Readonly<Record<string, string>>,
+  source: string,
+  result: Awaited<ReturnType<typeof readContract>>["result"],
+  input: string,
+  dependencies: CliDependencies,
+): Promise<string> {
   const imported = await requestJson(
     joinServerUrl(server, "/v1/contracts/import"),
     {
@@ -260,26 +245,35 @@ export async function publishCommand(
       "Reference server did not return an import identifier.",
     );
   }
-  let published: JsonHttpResponse;
+  return importId;
+}
+
+async function requestPublishedRelease(
+  server: string,
+  headers: Readonly<Record<string, string>>,
+  publishIdempotencyKey: string,
+  importId: string,
+  overrideReason: string | undefined,
+  dependencies: CliDependencies,
+  requestFingerprint: string,
+  json: boolean,
+): Promise<JsonHttpResponse | CliExitCode> {
   try {
-    published = await requestJson(
-      joinServerUrl(server, "/v1/releases/publish"),
-      {
-        method: "POST",
-        headers: {
-          ...headers,
-          "idempotency-key": publishIdempotencyKey,
-        },
-        body: {
-          importId,
-          ...(overrideReason === undefined ? {} : { overrideReason }),
-        },
-        ...(dependencies.fetchImplementation === undefined
-          ? {}
-          : { fetchImplementation: dependencies.fetchImplementation }),
-        timeoutMilliseconds: 15_000,
+    return await requestJson(joinServerUrl(server, "/v1/releases/publish"), {
+      method: "POST",
+      headers: {
+        ...headers,
+        "idempotency-key": publishIdempotencyKey,
       },
-    );
+      body: {
+        importId,
+        ...(overrideReason === undefined ? {} : { overrideReason }),
+      },
+      ...(dependencies.fetchImplementation === undefined
+        ? {}
+        : { fetchImplementation: dependencies.fetchImplementation }),
+      timeoutMilliseconds: 15_000,
+    });
   } catch (error) {
     if (error instanceof HttpRequestOutcomeUnknownError) {
       try {
@@ -321,6 +315,15 @@ export async function publishCommand(
     }
     throw error;
   }
+}
+
+function handlePublishResponse(
+  published: JsonHttpResponse,
+  dependencies: CliDependencies,
+  json: boolean,
+  publishIdempotencyKey: string,
+  importId: string,
+): CliExitCode {
   if (published.status < 200 || published.status >= 300) {
     throw serverError(published);
   }
@@ -352,6 +355,80 @@ export async function publishCommand(
     release,
   });
   return CLI_EXIT_CODES.success;
+}
+
+export async function publishCommand(
+  args: readonly string[],
+  dependencies: CliDependencies,
+): Promise<CliExitCode> {
+  const parsed = parseCommandArguments(args, {
+    ...SERVER_OPTIONS,
+    "idempotency-key": { type: "string" },
+    "override-reason": { type: "string" },
+  });
+  ensurePositionals(parsed.positionals, 1);
+  const input = parsed.positionals[0]!;
+  const { source, result } = await readContract(input, dependencies);
+  const contract = requireValidContract(result);
+  const server =
+    stringOption(parsed.values, "server") ?? "http://127.0.0.1:3210";
+  const headers = await apiTokenHeaders(parsed.values, dependencies);
+  const overrideReason = normalizedOverrideReason(parsed.values);
+  const requestFingerprint = publishRequestFingerprint(
+    contract.checksum.value,
+    overrideReason,
+  );
+  const publishIdempotencyKey =
+    stringOption(parsed.values, "idempotency-key") ??
+    `publish_${requestFingerprint}`;
+  const json = booleanOption(parsed.values, "json");
+
+  const preflight = await requestPublishStatus(
+    server,
+    headers,
+    publishIdempotencyKey,
+    dependencies,
+  );
+  const preflightExit = handlePublishPreflight(
+    preflight,
+    dependencies,
+    json,
+    publishIdempotencyKey,
+    requestFingerprint,
+  );
+  if (preflightExit !== undefined) {
+    return preflightExit;
+  }
+
+  const importId = await importContractForPublish(
+    server,
+    headers,
+    source,
+    result,
+    input,
+    dependencies,
+  );
+  const publishResult = await requestPublishedRelease(
+    server,
+    headers,
+    publishIdempotencyKey,
+    importId,
+    overrideReason,
+    dependencies,
+    requestFingerprint,
+    json,
+  );
+  if (typeof publishResult === "number") {
+    return publishResult;
+  }
+
+  return handlePublishResponse(
+    publishResult,
+    dependencies,
+    json,
+    publishIdempotencyKey,
+    importId,
+  );
 }
 
 export async function publishStatusCommand(
