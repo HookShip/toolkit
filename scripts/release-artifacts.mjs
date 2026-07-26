@@ -53,25 +53,116 @@ export async function inspectTarball(tarball, extractDirectory) {
   return readJson(path.join(contents, "package.json"));
 }
 
-export function dependencyPackages(pkg) {
+export function dependencyPackages(pkg, resolved = {}) {
   return Object.entries({
     ...pkg.dependencies,
     ...pkg.optionalDependencies,
     ...pkg.peerDependencies,
-  }).map(([name, version], index) => ({
-    SPDXID: `SPDXRef-Dependency-${index + 1}`,
-    name,
-    versionInfo: version,
-    downloadLocation: "NOASSERTION",
-    filesAnalyzed: false,
-    licenseConcluded: "NOASSERTION",
-    licenseDeclared: "NOASSERTION",
-    copyrightText: "NOASSERTION",
-  }));
+  }).map(([name, declaredRange], index) => {
+    const info = resolved[name] ?? {};
+    const version =
+      typeof info.version === "string" ? info.version : declaredRange;
+    const license =
+      typeof info.license === "string" ? info.license : "NOASSERTION";
+    const entry = {
+      SPDXID: `SPDXRef-Dependency-${index + 1}`,
+      name,
+      versionInfo: version,
+      downloadLocation: "NOASSERTION",
+      filesAnalyzed: false,
+      licenseConcluded: license,
+      licenseDeclared: license,
+      copyrightText: "NOASSERTION",
+    };
+    // A package-URL is a stable identifier (not an invented endpoint), so it is
+    // only emitted once the exact installed version is known.
+    if (typeof info.version === "string") {
+      entry.externalRefs = [
+        {
+          referenceCategory: "PACKAGE-MANAGER",
+          referenceType: "purl",
+          referenceLocator: `pkg:npm/${purlName(name)}@${info.version}`,
+        },
+      ];
+    }
+    return entry;
+  });
 }
 
-export function sbomFor(pkg, checksum) {
-  const dependencies = dependencyPackages(pkg);
+// npm package URLs encode a scope's leading "@" as %40 and keep the "/" between
+// scope and package name as the purl namespace separator.
+export function purlName(name) {
+  if (name.startsWith("@")) {
+    const slash = name.indexOf("/");
+    if (slash !== -1) {
+      return `%40${name.slice(1, slash)}/${name.slice(slash + 1)}`;
+    }
+  }
+  return name;
+}
+
+// Extracts a declared SPDX license expression from an installed package's
+// manifest, tolerating the deprecated `license` object and `licenses` array
+// forms. Returns null when no license is declared so callers fall back to
+// NOASSERTION rather than inventing one.
+export function declaredLicense(pkg) {
+  if (!pkg || typeof pkg !== "object") return null;
+  if (typeof pkg.license === "string" && pkg.license.trim() !== "") {
+    return pkg.license.trim();
+  }
+  if (
+    pkg.license &&
+    typeof pkg.license === "object" &&
+    typeof pkg.license.type === "string" &&
+    pkg.license.type.trim() !== ""
+  ) {
+    return pkg.license.type.trim();
+  }
+  if (Array.isArray(pkg.licenses)) {
+    const types = pkg.licenses
+      .map((entry) => entry?.type)
+      .filter((type) => typeof type === "string" && type.trim() !== "");
+    if (types.length === 1) return types[0];
+    if (types.length > 1) return `(${types.join(" OR ")})`;
+  }
+  return null;
+}
+
+// Reads the resolved version and declared license of every runtime dependency
+// from the frozen install tree, without executing any dependency code. pnpm
+// nests a package's own dependencies under its local node_modules and symlinks
+// them into the content-addressed store, so the package directory is checked
+// first and the workspace root second. Dependencies that cannot be resolved are
+// omitted, and the SBOM then falls back to their declared range.
+export async function resolveDependencyMetadata(pkg, packageDir) {
+  const names = Object.keys({
+    ...pkg.dependencies,
+    ...pkg.optionalDependencies,
+    ...pkg.peerDependencies,
+  });
+  const resolved = {};
+  for (const name of names) {
+    for (const base of [path.join(root, packageDir), root]) {
+      try {
+        const manifest = await readJson(
+          path.join(base, "node_modules", name, "package.json"),
+        );
+        resolved[name] = {
+          version:
+            typeof manifest.version === "string" ? manifest.version : null,
+          license: declaredLicense(manifest),
+        };
+        break;
+      } catch {
+        // Try the next candidate location; unresolved names are left out.
+      }
+    }
+  }
+  return resolved;
+}
+
+export function sbomFor(pkg, checksum, resolved = {}) {
+  const dependencies = dependencyPackages(pkg, resolved);
   return {
     spdxVersion: "SPDX-2.3",
     dataLicense: "CC0-1.0",
@@ -153,9 +244,13 @@ export async function buildArtifacts({ publishDryRun }) {
     checksumLines.push(`${checksum}  ${relativeTarball}`);
 
     const safeName = entry.name.replaceAll("/", "-").replace(/^@/, "");
+    const resolvedDependencies = await resolveDependencyMetadata(
+      packedManifest,
+      entry.path,
+    );
     await writeFile(
       path.join(metadataRoot, `${safeName}-${entry.version}.spdx.json`),
-      `${JSON.stringify(sbomFor(packedManifest, checksum), null, 2)}\n`,
+      `${JSON.stringify(sbomFor(packedManifest, checksum, resolvedDependencies), null, 2)}\n`,
     );
     const provenance = {
       _type: "https://in-toto.io/Statement/v1",

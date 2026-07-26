@@ -49,6 +49,12 @@ is why those outputs are git-ignored.
   [`scripts/release-artifacts.mjs`](../scripts/release-artifacts.mjs) (invoked
   through `release:dry-run`/`release:artifacts`). See
   [`release-policy.md`](release-policy.md).
+- **SBOM contents are resolved, not merely declared.** Each dependency in a
+  generated SPDX SBOM records the exact version and declared license read from
+  the frozen install tree (`pnpm install --frozen-lockfile`), plus a `purl`
+  package-URL identity, instead of the declared semver range. A dependency that
+  cannot be resolved falls back to its declared range with a `NOASSERTION`
+  license and no `purl`.
 - Extension bundles are reproducible from a fixed source digest and build
   timestamp; local signatures use a development key fixture and must be
   re-signed by controlled release keys. See each pack's `PROVENANCE.md`.

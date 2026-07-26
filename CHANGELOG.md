@@ -72,6 +72,9 @@ Release status: unreleased.
 
 ### Changed
 
+- Generated SPDX SBOMs now record each dependency's exact installed version and
+  declared license (resolved from the frozen install tree) plus a `purl`
+  identity, instead of the declared semver range.
 - Extracted the public toolkit from assumptions about absent private
   applications, packages, infrastructure, and operational documents.
 - Coordinated all 14 public packages in one release manifest while retaining

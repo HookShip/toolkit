@@ -17,7 +17,13 @@ import {
   validateOwnership,
   validateRepository,
 } from "./release-manifest.mjs";
-import { dependencyPackages, sbomFor } from "./release-artifacts.mjs";
+import {
+  declaredLicense,
+  dependencyPackages,
+  purlName,
+  resolveDependencyMetadata,
+  sbomFor,
+} from "./release-artifacts.mjs";
 import {
   parsePublishArgs,
   publishPreflight,
@@ -192,6 +198,84 @@ test("release-artifacts builds a deterministic SPDX SBOM", () => {
   assert.equal(sbom.spdxVersion, "SPDX-2.3");
   assert.equal(sbom.SPDXID, "SPDXRef-DOCUMENT");
   assert.match(sbom.documentNamespace, /:1\.2\.3:sha256-abc$/u);
+});
+
+test("dependencyPackages uses resolved versions/licenses and falls back to the range", () => {
+  const resolved = {
+    pg: { version: "8.22.0", license: "MIT" },
+    "@webhook-portal/canonical-model": {
+      version: "0.1.0",
+      license: "Apache-2.0",
+    },
+  };
+  const deps = dependencyPackages(
+    {
+      dependencies: {
+        pg: "^8.0.0",
+        "@webhook-portal/canonical-model": "0.1.0",
+      },
+      peerDependencies: { unresolved: "^3.0.0" },
+    },
+    resolved,
+  );
+  const pg = deps.find((d) => d.name === "pg");
+  assert.equal(pg.versionInfo, "8.22.0");
+  assert.equal(pg.licenseConcluded, "MIT");
+  assert.equal(pg.licenseDeclared, "MIT");
+  assert.deepEqual(pg.externalRefs, [
+    {
+      referenceCategory: "PACKAGE-MANAGER",
+      referenceType: "purl",
+      referenceLocator: "pkg:npm/pg@8.22.0",
+    },
+  ]);
+  // A scoped resolved dependency gets a percent-encoded purl namespace.
+  const canonical = deps.find(
+    (d) => d.name === "@webhook-portal/canonical-model",
+  );
+  assert.equal(
+    canonical.externalRefs[0].referenceLocator,
+    "pkg:npm/%40webhook-portal/canonical-model@0.1.0",
+  );
+  // An unresolved dependency keeps its declared range and NOASSERTION license
+  // and carries no purl (no exact version is known).
+  const unresolved = deps.find((d) => d.name === "unresolved");
+  assert.equal(unresolved.versionInfo, "^3.0.0");
+  assert.equal(unresolved.licenseDeclared, "NOASSERTION");
+  assert.equal(unresolved.externalRefs, undefined);
+});
+
+test("purlName percent-encodes scoped names and passes through unscoped names", () => {
+  assert.equal(purlName("pg"), "pg");
+  assert.equal(purlName("@webhook-portal/cli"), "%40webhook-portal/cli");
+});
+
+test("declaredLicense reads string, deprecated object, and array license forms", () => {
+  assert.equal(declaredLicense({ license: "MIT" }), "MIT");
+  assert.equal(declaredLicense({ license: { type: "ISC" } }), "ISC");
+  assert.equal(
+    declaredLicense({ licenses: [{ type: "MIT" }, { type: "Apache-2.0" }] }),
+    "(MIT OR Apache-2.0)",
+  );
+  assert.equal(declaredLicense({}), null);
+  assert.equal(declaredLicense(null), null);
+});
+
+test("resolveDependencyMetadata reads exact versions and licenses from the install tree", async () => {
+  // The CLI depends on `yaml`, resolvable from its local node_modules.
+  const resolved = await resolveDependencyMetadata(
+    { dependencies: { yaml: "^2.9.0" } },
+    "packages/cli",
+  );
+  assert.ok(resolved.yaml, "yaml should resolve from packages/cli");
+  assert.match(resolved.yaml.version, /^\d+\.\d+\.\d+/u);
+  assert.equal(typeof resolved.yaml.license, "string");
+  // An unknown dependency is simply omitted, never invented.
+  const missing = await resolveDependencyMetadata(
+    { dependencies: { "definitely-not-installed-xyz": "^1.0.0" } },
+    "packages/cli",
+  );
+  assert.equal(missing["definitely-not-installed-xyz"], undefined);
 });
 
 test("release-publish orders the graph topologically and preflights publishes", () => {
