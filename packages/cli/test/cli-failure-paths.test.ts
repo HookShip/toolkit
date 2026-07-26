@@ -5,7 +5,7 @@ import { chmod, mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { Readable, Writable } from "node:stream";
 
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, describe, expect, it } from "vitest";
 
 import { CLI_EXIT_CODES, runCli, type CliDependencies } from "../src/index.js";
 
@@ -154,6 +154,20 @@ describe("CLI dispatch and usage errors", () => {
 });
 
 describe("serve and migrate commands", () => {
+  // `migrate`/`serve` without an injected dependency lazily import the heavy
+  // reference-server runtime (Fastify/PG/MinIO) from
+  // @webhook-portal/reference-server-core. Warm that module graph exactly once
+  // here so the individual assertions measure CLI behavior rather than a
+  // one-time cold ESM import, which under load can exceed a per-test timeout.
+  // Importing the module has no side effects (no connections open until a
+  // command runs with configuration), and the bounded hook timeout covers only
+  // this single cold import without relaxing any test's own timeout or masking a
+  // failure. The lazy `await import(...)` inside the CLI then resolves from the
+  // module cache.
+  beforeAll(async () => {
+    await import("@webhook-portal/reference-server-core");
+  }, 120_000);
+
   async function runWith(
     argv: readonly string[],
     deps: Partial<
