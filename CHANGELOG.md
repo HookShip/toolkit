@@ -61,6 +61,8 @@ Release status: unreleased.
 - Release policy and compatibility matrix documentation owned by this repository
   (`docs/release-policy.md`, `docs/compatibility-matrix.md`) and ADR-0008 on
   release ownership and automation.
+- Release preflight checklist (`docs/release-preflight.md`) that records the
+  external npm scope/OIDC prerequisite as explicitly unverified and fail-closed.
 - Documentation package-count gate in `scripts/check-docs.mjs`: prose
   cohort-size claims and the README package table are checked against the
   enforced `publicPackageCount`, so a docs edit cannot drift from the manifest.

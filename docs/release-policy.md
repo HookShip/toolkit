@@ -156,3 +156,9 @@ No package, tag, or release has been published yet; the manifest is `unreleased`
 and the current cohort version is a release candidate. This document describes
 the process that will be used once the `@webhook-portal` scope is authenticated
 for publishing.
+
+Before the first publish, work through the
+[release preflight checklist](release-preflight.md). It records the external npm
+scope/OIDC prerequisite as **unverified** and fail-closed: this repository does
+not claim the `@webhook-portal` scope is owned or provenance-ready, and
+publishing is expected to fail closed until a maintainer confirms it.

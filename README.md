@@ -227,6 +227,7 @@ release/     coordinated public package manifest
 - [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md)
 - [`docs/org-context.md`](docs/org-context.md)
 - [`docs/release-policy.md`](docs/release-policy.md)
+- [`docs/release-preflight.md`](docs/release-preflight.md)
 - [`docs/compatibility-matrix.md`](docs/compatibility-matrix.md)
 - [`docs/generated-artifacts.md`](docs/generated-artifacts.md)
 - [`docs/architecture/README.md`](docs/architecture/README.md)
