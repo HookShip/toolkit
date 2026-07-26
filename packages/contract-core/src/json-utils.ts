@@ -35,6 +35,307 @@ export interface SnapshotResult extends InspectionResult {
   readonly value?: JsonValue;
 }
 
+interface SnapshotVisitState {
+  readonly ancestors: Set<object>;
+  bytes: number;
+  failure?: InspectionFailure;
+  nodes: number;
+}
+
+interface InspectionVisitState {
+  readonly ancestors: Set<object>;
+  bytes: number;
+  failure?: InspectionFailure;
+  nodes: number;
+}
+
+function failSnapshot(
+  state: SnapshotVisitState,
+  code: string,
+  message: string,
+  pointer: string,
+): undefined {
+  state.failure ??= { code, message, pointer };
+  return undefined;
+}
+
+function failInspection(
+  state: InspectionVisitState,
+  code: string,
+  message: string,
+  pointer: string,
+): false {
+  state.failure ??= { code, message, pointer };
+  return false;
+}
+
+function snapshotArrayValue(
+  candidate: readonly unknown[],
+  pointer: string,
+  depth: number,
+  limits: ContractLimits,
+  state: SnapshotVisitState,
+): JsonValue | undefined {
+  const descriptors = Object.getOwnPropertyDescriptors(
+    candidate,
+  ) as unknown as Record<PropertyKey, PropertyDescriptor>;
+  const lengthDescriptor = descriptors["length"];
+  const length =
+    lengthDescriptor !== undefined && "value" in lengthDescriptor
+      ? lengthDescriptor.value
+      : undefined;
+  const keys = Reflect.ownKeys(descriptors);
+  if (
+    typeof length !== "number" ||
+    !Number.isSafeInteger(length) ||
+    length < 0
+  ) {
+    return failSnapshot(
+      state,
+      "NON_JSON_ARRAY_PROPERTY",
+      "Array length is invalid",
+      pointer,
+    );
+  } else if (
+    keys.some(
+      (key) =>
+        key !== "length" &&
+        (typeof key !== "string" || !/^(?:0|[1-9]\d*)$/u.test(key)),
+    )
+  ) {
+    return failSnapshot(
+      state,
+      "NON_JSON_ARRAY_PROPERTY",
+      "JSON arrays cannot contain named or symbol properties",
+      pointer,
+    );
+  } else if (length > limits.maxNodes - state.nodes) {
+    return failSnapshot(
+      state,
+      "NODE_LIMIT_EXCEEDED",
+      `Input exceeds the ${limits.maxNodes} node limit`,
+      pointer,
+    );
+  } else {
+    const array: JsonValue[] = [];
+    for (let index = 0; index < length; index += 1) {
+      const descriptor = descriptors[String(index)];
+      const itemPointer = joinPointer(pointer, index);
+      if (
+        descriptor === undefined ||
+        !("value" in descriptor) ||
+        !descriptor.enumerable
+      ) {
+        return descriptor === undefined
+          ? failSnapshot(
+              state,
+              "SPARSE_ARRAY",
+              "Sparse arrays are not portable JSON values",
+              itemPointer,
+            )
+          : failSnapshot(
+              state,
+              "ACCESSOR_PROPERTY_DENIED",
+              "Accessor and non-enumerable properties are not accepted",
+              itemPointer,
+            );
+      }
+      const item = snapshotVisit(
+        descriptor.value,
+        depth + 1,
+        itemPointer,
+        limits,
+        state,
+      );
+      if (item === undefined) {
+        return undefined;
+      }
+      array.push(item);
+    }
+    if (state.failure === undefined) return Object.freeze(array);
+  }
+  return undefined;
+}
+
+function snapshotObjectValue(
+  candidate: object,
+  pointer: string,
+  depth: number,
+  limits: ContractLimits,
+  state: SnapshotVisitState,
+): JsonValue | undefined {
+  const descriptors = Object.getOwnPropertyDescriptors(candidate);
+  const keys = Reflect.ownKeys(descriptors);
+  if (keys.some((key) => typeof key !== "string")) {
+    return failSnapshot(
+      state,
+      "SYMBOL_PROPERTY_DENIED",
+      "Symbol properties are not JSON-serializable",
+      pointer,
+    );
+  } else if (keys.length > limits.maxPropertiesPerObject) {
+    return failSnapshot(
+      state,
+      "PROPERTY_LIMIT_EXCEEDED",
+      `Object exceeds the ${limits.maxPropertiesPerObject} property limit`,
+      pointer,
+    );
+  } else {
+    const object: Record<string, JsonValue> = {};
+    for (const key of keys as string[]) {
+      const descriptor = descriptors[key];
+      const itemPointer = joinPointer(pointer, key);
+      if (
+        descriptor === undefined ||
+        !("value" in descriptor) ||
+        !descriptor.enumerable
+      ) {
+        return failSnapshot(
+          state,
+          "ACCESSOR_PROPERTY_DENIED",
+          "Accessor and non-enumerable properties are not accepted",
+          itemPointer,
+        );
+      }
+      state.bytes += Buffer.byteLength(key, "utf8") + 3;
+      if (state.bytes > limits.maxInputBytes) {
+        return failSnapshot(
+          state,
+          "INPUT_SIZE_LIMIT_EXCEEDED",
+          `Expanded input exceeds the ${limits.maxInputBytes} byte limit`,
+          itemPointer,
+        );
+      }
+      if (unsafeKeys.has(key)) {
+        return failSnapshot(
+          state,
+          "UNSAFE_OBJECT_KEY",
+          `Object key "${key}" is not permitted`,
+          itemPointer,
+        );
+      }
+      const item = snapshotVisit(
+        descriptor.value,
+        depth + 1,
+        itemPointer,
+        limits,
+        state,
+      );
+      if (item === undefined) {
+        return undefined;
+      }
+      Object.defineProperty(object, key, {
+        configurable: false,
+        enumerable: true,
+        value: item,
+        writable: false,
+      });
+    }
+    if (state.failure === undefined) return Object.freeze(object);
+  }
+  return undefined;
+}
+
+function snapshotVisit(
+  candidate: unknown,
+  depth: number,
+  pointer: string,
+  limits: ContractLimits,
+  state: SnapshotVisitState,
+): JsonValue | undefined {
+  state.nodes += 1;
+  state.bytes += 1;
+  if (state.bytes > limits.maxInputBytes) {
+    return failSnapshot(
+      state,
+      "INPUT_SIZE_LIMIT_EXCEEDED",
+      `Expanded input exceeds the ${limits.maxInputBytes} byte limit`,
+      pointer,
+    );
+  }
+  if (state.nodes > limits.maxNodes) {
+    return failSnapshot(
+      state,
+      "NODE_LIMIT_EXCEEDED",
+      `Input exceeds the ${limits.maxNodes} node limit`,
+      pointer,
+    );
+  }
+  if (depth > limits.maxDepth) {
+    return failSnapshot(
+      state,
+      "DEPTH_LIMIT_EXCEEDED",
+      `Input exceeds the ${limits.maxDepth} level depth limit`,
+      pointer,
+    );
+  }
+  if (
+    candidate === null ||
+    typeof candidate === "boolean" ||
+    typeof candidate === "number"
+  ) {
+    state.bytes += typeof candidate === "number" ? 24 : 5;
+    return typeof candidate !== "number" || Number.isFinite(candidate)
+      ? candidate
+      : failSnapshot(
+          state,
+          "NON_FINITE_NUMBER",
+          "JSON numbers must be finite",
+          pointer,
+        );
+  }
+  if (typeof candidate === "string") {
+    const stringBytes = Buffer.byteLength(candidate, "utf8");
+    state.bytes += stringBytes;
+    if (stringBytes > limits.maxStringBytes) {
+      return failSnapshot(
+        state,
+        "STRING_LIMIT_EXCEEDED",
+        `String exceeds the ${limits.maxStringBytes} byte limit`,
+        pointer,
+      );
+    }
+    return state.bytes <= limits.maxInputBytes
+      ? candidate
+      : failSnapshot(
+          state,
+          "INPUT_SIZE_LIMIT_EXCEEDED",
+          `Expanded input exceeds the ${limits.maxInputBytes} byte limit`,
+          pointer,
+        );
+  }
+  if (typeof candidate !== "object") {
+    return failSnapshot(
+      state,
+      "NON_JSON_VALUE",
+      "Input contains a value that is not JSON-serializable",
+      pointer,
+    );
+  }
+  if (state.ancestors.has(candidate)) {
+    return failSnapshot(
+      state,
+      "CYCLIC_INPUT",
+      "Input contains an object cycle",
+      pointer,
+    );
+  }
+
+  state.ancestors.add(candidate);
+  const snapshot = Array.isArray(candidate)
+    ? snapshotArrayValue(candidate, pointer, depth, limits, state)
+    : isJsonObject(candidate)
+      ? snapshotObjectValue(candidate, pointer, depth, limits, state)
+      : failSnapshot(
+          state,
+          "NON_PLAIN_OBJECT",
+          "Only plain JSON objects are accepted",
+          pointer,
+        );
+  state.ancestors.delete(candidate);
+  return snapshot;
+}
+
 /**
  * Creates a descriptor-based immutable JSON snapshot while enforcing limits.
  * User objects and proxies are never retained in the returned value.
@@ -43,234 +344,19 @@ export function snapshotJsonValue(
   value: unknown,
   limits: ContractLimits,
 ): SnapshotResult {
-  const ancestors = new Set<object>();
-  let bytes = 0;
-  let nodes = 0;
-  let failure: InspectionFailure | undefined;
-
-  const fail = (code: string, message: string, pointer: string): undefined => {
-    failure ??= { code, message, pointer };
-    return undefined;
+  const state: SnapshotVisitState = {
+    ancestors: new Set<object>(),
+    bytes: 0,
+    nodes: 0,
   };
-
-  const visit = (
-    candidate: unknown,
-    depth: number,
-    pointer: string,
-  ): JsonValue | undefined => {
-    nodes += 1;
-    bytes += 1;
-    if (bytes > limits.maxInputBytes) {
-      return fail(
-        "INPUT_SIZE_LIMIT_EXCEEDED",
-        `Expanded input exceeds the ${limits.maxInputBytes} byte limit`,
-        pointer,
-      );
-    }
-    if (nodes > limits.maxNodes) {
-      return fail(
-        "NODE_LIMIT_EXCEEDED",
-        `Input exceeds the ${limits.maxNodes} node limit`,
-        pointer,
-      );
-    }
-    if (depth > limits.maxDepth) {
-      return fail(
-        "DEPTH_LIMIT_EXCEEDED",
-        `Input exceeds the ${limits.maxDepth} level depth limit`,
-        pointer,
-      );
-    }
-    if (
-      candidate === null ||
-      typeof candidate === "boolean" ||
-      typeof candidate === "number"
-    ) {
-      bytes += typeof candidate === "number" ? 24 : 5;
-      return typeof candidate !== "number" || Number.isFinite(candidate)
-        ? candidate
-        : fail("NON_FINITE_NUMBER", "JSON numbers must be finite", pointer);
-    }
-    if (typeof candidate === "string") {
-      const stringBytes = Buffer.byteLength(candidate, "utf8");
-      bytes += stringBytes;
-      if (stringBytes > limits.maxStringBytes) {
-        return fail(
-          "STRING_LIMIT_EXCEEDED",
-          `String exceeds the ${limits.maxStringBytes} byte limit`,
-          pointer,
-        );
-      }
-      return bytes <= limits.maxInputBytes
-        ? candidate
-        : fail(
-            "INPUT_SIZE_LIMIT_EXCEEDED",
-            `Expanded input exceeds the ${limits.maxInputBytes} byte limit`,
-            pointer,
-          );
-    }
-    if (typeof candidate !== "object") {
-      return fail(
-        "NON_JSON_VALUE",
-        "Input contains a value that is not JSON-serializable",
-        pointer,
-      );
-    }
-    if (ancestors.has(candidate)) {
-      return fail("CYCLIC_INPUT", "Input contains an object cycle", pointer);
-    }
-
-    ancestors.add(candidate);
-    let snapshot: JsonValue | undefined;
-    if (Array.isArray(candidate)) {
-      const descriptors = Object.getOwnPropertyDescriptors(
-        candidate,
-      ) as unknown as Record<PropertyKey, PropertyDescriptor>;
-      const lengthDescriptor = descriptors["length"];
-      const length =
-        lengthDescriptor !== undefined && "value" in lengthDescriptor
-          ? lengthDescriptor.value
-          : undefined;
-      const keys = Reflect.ownKeys(descriptors);
-      if (
-        typeof length !== "number" ||
-        !Number.isSafeInteger(length) ||
-        length < 0
-      ) {
-        snapshot = fail(
-          "NON_JSON_ARRAY_PROPERTY",
-          "Array length is invalid",
-          pointer,
-        );
-      } else if (
-        keys.some(
-          (key) =>
-            key !== "length" &&
-            (typeof key !== "string" || !/^(?:0|[1-9]\d*)$/u.test(key)),
-        )
-      ) {
-        snapshot = fail(
-          "NON_JSON_ARRAY_PROPERTY",
-          "JSON arrays cannot contain named or symbol properties",
-          pointer,
-        );
-      } else if (length > limits.maxNodes - nodes) {
-        snapshot = fail(
-          "NODE_LIMIT_EXCEEDED",
-          `Input exceeds the ${limits.maxNodes} node limit`,
-          pointer,
-        );
-      } else {
-        const array: JsonValue[] = [];
-        for (let index = 0; index < length; index += 1) {
-          const descriptor = descriptors[String(index)];
-          const itemPointer = joinPointer(pointer, index);
-          if (
-            descriptor === undefined ||
-            !("value" in descriptor) ||
-            !descriptor.enumerable
-          ) {
-            snapshot =
-              descriptor === undefined
-                ? fail(
-                    "SPARSE_ARRAY",
-                    "Sparse arrays are not portable JSON values",
-                    itemPointer,
-                  )
-                : fail(
-                    "ACCESSOR_PROPERTY_DENIED",
-                    "Accessor and non-enumerable properties are not accepted",
-                    itemPointer,
-                  );
-            break;
-          }
-          const item = visit(descriptor.value, depth + 1, itemPointer);
-          if (item === undefined) {
-            snapshot = undefined;
-            break;
-          }
-          array.push(item);
-        }
-        if (failure === undefined) snapshot = Object.freeze(array);
-      }
-    } else if (isJsonObject(candidate)) {
-      const descriptors = Object.getOwnPropertyDescriptors(candidate);
-      const keys = Reflect.ownKeys(descriptors);
-      if (keys.some((key) => typeof key !== "string")) {
-        snapshot = fail(
-          "SYMBOL_PROPERTY_DENIED",
-          "Symbol properties are not JSON-serializable",
-          pointer,
-        );
-      } else if (keys.length > limits.maxPropertiesPerObject) {
-        snapshot = fail(
-          "PROPERTY_LIMIT_EXCEEDED",
-          `Object exceeds the ${limits.maxPropertiesPerObject} property limit`,
-          pointer,
-        );
-      } else {
-        const object: Record<string, JsonValue> = {};
-        for (const key of keys as string[]) {
-          const descriptor = descriptors[key];
-          const itemPointer = joinPointer(pointer, key);
-          if (
-            descriptor === undefined ||
-            !("value" in descriptor) ||
-            !descriptor.enumerable
-          ) {
-            snapshot = fail(
-              "ACCESSOR_PROPERTY_DENIED",
-              "Accessor and non-enumerable properties are not accepted",
-              itemPointer,
-            );
-            break;
-          }
-          bytes += Buffer.byteLength(key, "utf8") + 3;
-          if (bytes > limits.maxInputBytes) {
-            snapshot = fail(
-              "INPUT_SIZE_LIMIT_EXCEEDED",
-              `Expanded input exceeds the ${limits.maxInputBytes} byte limit`,
-              itemPointer,
-            );
-            break;
-          }
-          if (unsafeKeys.has(key)) {
-            snapshot = fail(
-              "UNSAFE_OBJECT_KEY",
-              `Object key "${key}" is not permitted`,
-              itemPointer,
-            );
-            break;
-          }
-          const item = visit(descriptor.value, depth + 1, itemPointer);
-          if (item === undefined) {
-            snapshot = undefined;
-            break;
-          }
-          Object.defineProperty(object, key, {
-            configurable: false,
-            enumerable: true,
-            value: item,
-            writable: false,
-          });
-        }
-        if (failure === undefined) snapshot = Object.freeze(object);
-      }
-    } else {
-      snapshot = fail(
-        "NON_PLAIN_OBJECT",
-        "Only plain JSON objects are accepted",
-        pointer,
-      );
-    }
-    ancestors.delete(candidate);
-    return snapshot;
-  };
-
-  const snapshot = visit(value, 0, "");
-  return failure === undefined && snapshot !== undefined
-    ? { bytes, nodes, value: snapshot }
-    : { bytes, ...(failure === undefined ? {} : { failure }), nodes };
+  const snapshot = snapshotVisit(value, 0, "", limits, state);
+  return state.failure === undefined && snapshot !== undefined
+    ? { bytes: state.bytes, nodes: state.nodes, value: snapshot }
+    : {
+        bytes: state.bytes,
+        ...(state.failure === undefined ? {} : { failure: state.failure }),
+        nodes: state.nodes,
+      };
 }
 
 export function escapePointerToken(token: string): string {
@@ -281,208 +367,250 @@ export function joinPointer(pointer: string, token: string | number): string {
   return `${pointer}/${escapePointerToken(String(token))}`;
 }
 
+function inspectArrayValue(
+  candidate: readonly unknown[],
+  pointer: string,
+  depth: number,
+  limits: ContractLimits,
+  state: InspectionVisitState,
+): boolean {
+  const descriptors = Object.getOwnPropertyDescriptors(candidate);
+  const keys = Reflect.ownKeys(descriptors);
+  const invalidKey = keys.find(
+    (key) =>
+      key !== "length" &&
+      (typeof key !== "string" || !/^(?:0|[1-9]\d*)$/u.test(key)),
+  );
+  if (invalidKey !== undefined) {
+    return failInspection(
+      state,
+      "NON_JSON_ARRAY_PROPERTY",
+      "JSON arrays cannot contain named or symbol properties",
+      pointer,
+    );
+  } else if (candidate.length > limits.maxNodes - state.nodes) {
+    return failInspection(
+      state,
+      "NODE_LIMIT_EXCEEDED",
+      `Input exceeds the ${limits.maxNodes} node limit`,
+      pointer,
+    );
+  } else {
+    for (let index = 0; index < candidate.length; index += 1) {
+      const descriptor = descriptors[String(index)];
+      const itemPointer = joinPointer(pointer, index);
+      if (descriptor === undefined) {
+        return failInspection(
+          state,
+          "SPARSE_ARRAY",
+          "Sparse arrays are not portable JSON values",
+          itemPointer,
+        );
+      }
+      if (!("value" in descriptor) || !descriptor.enumerable) {
+        return failInspection(
+          state,
+          "ACCESSOR_PROPERTY_DENIED",
+          "Accessor and non-enumerable properties are not accepted",
+          itemPointer,
+        );
+      }
+      if (
+        !inspectVisit(descriptor.value, depth + 1, itemPointer, limits, state)
+      ) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+function inspectObjectValue(
+  candidate: object,
+  pointer: string,
+  depth: number,
+  limits: ContractLimits,
+  state: InspectionVisitState,
+): boolean {
+  const descriptors = Object.getOwnPropertyDescriptors(candidate);
+  const keys = Reflect.ownKeys(descriptors);
+  if (keys.some((key) => typeof key !== "string")) {
+    return failInspection(
+      state,
+      "SYMBOL_PROPERTY_DENIED",
+      "Symbol properties are not JSON-serializable",
+      pointer,
+    );
+  } else if (keys.length > limits.maxPropertiesPerObject) {
+    return failInspection(
+      state,
+      "PROPERTY_LIMIT_EXCEEDED",
+      `Object exceeds the ${limits.maxPropertiesPerObject} property limit`,
+      pointer,
+    );
+  } else {
+    for (const key of keys as string[]) {
+      const descriptor = descriptors[key];
+      const itemPointer = joinPointer(pointer, key);
+      if (
+        descriptor === undefined ||
+        !("value" in descriptor) ||
+        !descriptor.enumerable
+      ) {
+        return failInspection(
+          state,
+          "ACCESSOR_PROPERTY_DENIED",
+          "Accessor and non-enumerable properties are not accepted",
+          itemPointer,
+        );
+      }
+      const item = descriptor.value;
+      state.bytes += Buffer.byteLength(key, "utf8") + 3;
+      if (state.bytes > limits.maxInputBytes) {
+        return failInspection(
+          state,
+          "INPUT_SIZE_LIMIT_EXCEEDED",
+          `Expanded input exceeds the ${limits.maxInputBytes} byte limit`,
+          itemPointer,
+        );
+      }
+      if (unsafeKeys.has(key)) {
+        return failInspection(
+          state,
+          "UNSAFE_OBJECT_KEY",
+          `Object key "${key}" is not permitted`,
+          itemPointer,
+        );
+      }
+      if (
+        item === undefined ||
+        !inspectVisit(item, depth + 1, itemPointer, limits, state)
+      ) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+function inspectVisit(
+  candidate: unknown,
+  depth: number,
+  pointer: string,
+  limits: ContractLimits,
+  state: InspectionVisitState,
+): boolean {
+  state.nodes += 1;
+  state.bytes += 1;
+  if (state.bytes > limits.maxInputBytes) {
+    return failInspection(
+      state,
+      "INPUT_SIZE_LIMIT_EXCEEDED",
+      `Expanded input exceeds the ${limits.maxInputBytes} byte limit`,
+      pointer,
+    );
+  }
+  if (state.nodes > limits.maxNodes) {
+    return failInspection(
+      state,
+      "NODE_LIMIT_EXCEEDED",
+      `Input exceeds the ${limits.maxNodes} node limit`,
+      pointer,
+    );
+  }
+  if (depth > limits.maxDepth) {
+    return failInspection(
+      state,
+      "DEPTH_LIMIT_EXCEEDED",
+      `Input exceeds the ${limits.maxDepth} level depth limit`,
+      pointer,
+    );
+  }
+
+  if (
+    candidate === null ||
+    typeof candidate === "boolean" ||
+    typeof candidate === "number"
+  ) {
+    state.bytes += typeof candidate === "number" ? 24 : 5;
+    return (
+      typeof candidate !== "number" ||
+      Number.isFinite(candidate) ||
+      failInspection(
+        state,
+        "NON_FINITE_NUMBER",
+        "JSON numbers must be finite",
+        pointer,
+      )
+    );
+  }
+
+  if (typeof candidate === "string") {
+    const stringBytes = Buffer.byteLength(candidate, "utf8");
+    state.bytes += stringBytes;
+    return stringBytes > limits.maxStringBytes
+      ? failInspection(
+          state,
+          "STRING_LIMIT_EXCEEDED",
+          `String exceeds the ${limits.maxStringBytes} byte limit`,
+          pointer,
+        )
+      : state.bytes <= limits.maxInputBytes ||
+          failInspection(
+            state,
+            "INPUT_SIZE_LIMIT_EXCEEDED",
+            `Expanded input exceeds the ${limits.maxInputBytes} byte limit`,
+            pointer,
+          );
+  }
+
+  if (typeof candidate !== "object") {
+    return failInspection(
+      state,
+      "NON_JSON_VALUE",
+      "Input contains a value that is not JSON-serializable",
+      pointer,
+    );
+  }
+
+  if (state.ancestors.has(candidate)) {
+    return failInspection(
+      state,
+      "CYCLIC_INPUT",
+      "Input contains an object cycle",
+      pointer,
+    );
+  }
+
+  state.ancestors.add(candidate);
+  const valid = Array.isArray(candidate)
+    ? inspectArrayValue(candidate, pointer, depth, limits, state)
+    : isJsonObject(candidate)
+      ? inspectObjectValue(candidate, pointer, depth, limits, state)
+      : failInspection(
+          state,
+          "NON_PLAIN_OBJECT",
+          "Only plain JSON objects are accepted",
+          pointer,
+        );
+
+  state.ancestors.delete(candidate);
+  return valid;
+}
+
 export function inspectJsonValue(
   value: unknown,
   limits: ContractLimits,
 ): InspectionResult {
-  const ancestors = new Set<object>();
-  let bytes = 0;
-  let nodes = 0;
-  let failure: InspectionFailure | undefined;
-
-  const fail = (code: string, message: string, pointer: string): false => {
-    failure ??= { code, message, pointer };
-    return false;
+  const state: InspectionVisitState = {
+    ancestors: new Set<object>(),
+    bytes: 0,
+    nodes: 0,
   };
-
-  const visit = (
-    candidate: unknown,
-    depth: number,
-    pointer: string,
-  ): boolean => {
-    nodes += 1;
-    bytes += 1;
-    if (bytes > limits.maxInputBytes) {
-      return fail(
-        "INPUT_SIZE_LIMIT_EXCEEDED",
-        `Expanded input exceeds the ${limits.maxInputBytes} byte limit`,
-        pointer,
-      );
-    }
-    if (nodes > limits.maxNodes) {
-      return fail(
-        "NODE_LIMIT_EXCEEDED",
-        `Input exceeds the ${limits.maxNodes} node limit`,
-        pointer,
-      );
-    }
-    if (depth > limits.maxDepth) {
-      return fail(
-        "DEPTH_LIMIT_EXCEEDED",
-        `Input exceeds the ${limits.maxDepth} level depth limit`,
-        pointer,
-      );
-    }
-
-    if (
-      candidate === null ||
-      typeof candidate === "boolean" ||
-      typeof candidate === "number"
-    ) {
-      bytes += typeof candidate === "number" ? 24 : 5;
-      return (
-        typeof candidate !== "number" ||
-        Number.isFinite(candidate) ||
-        fail("NON_FINITE_NUMBER", "JSON numbers must be finite", pointer)
-      );
-    }
-
-    if (typeof candidate === "string") {
-      const stringBytes = Buffer.byteLength(candidate, "utf8");
-      bytes += stringBytes;
-      return stringBytes > limits.maxStringBytes
-        ? fail(
-            "STRING_LIMIT_EXCEEDED",
-            `String exceeds the ${limits.maxStringBytes} byte limit`,
-            pointer,
-          )
-        : bytes <= limits.maxInputBytes ||
-            fail(
-              "INPUT_SIZE_LIMIT_EXCEEDED",
-              `Expanded input exceeds the ${limits.maxInputBytes} byte limit`,
-              pointer,
-            );
-    }
-
-    if (typeof candidate !== "object") {
-      return fail(
-        "NON_JSON_VALUE",
-        "Input contains a value that is not JSON-serializable",
-        pointer,
-      );
-    }
-
-    if (ancestors.has(candidate)) {
-      return fail("CYCLIC_INPUT", "Input contains an object cycle", pointer);
-    }
-
-    ancestors.add(candidate);
-    let valid = true;
-    if (Array.isArray(candidate)) {
-      const descriptors = Object.getOwnPropertyDescriptors(candidate);
-      const keys = Reflect.ownKeys(descriptors);
-      const invalidKey = keys.find(
-        (key) =>
-          key !== "length" &&
-          (typeof key !== "string" || !/^(?:0|[1-9]\d*)$/u.test(key)),
-      );
-      if (invalidKey !== undefined) {
-        valid = fail(
-          "NON_JSON_ARRAY_PROPERTY",
-          "JSON arrays cannot contain named or symbol properties",
-          pointer,
-        );
-      } else if (candidate.length > limits.maxNodes - nodes) {
-        valid = fail(
-          "NODE_LIMIT_EXCEEDED",
-          `Input exceeds the ${limits.maxNodes} node limit`,
-          pointer,
-        );
-      } else {
-        for (let index = 0; index < candidate.length; index += 1) {
-          const descriptor = descriptors[String(index)];
-          const itemPointer = joinPointer(pointer, index);
-          if (descriptor === undefined) {
-            valid = fail(
-              "SPARSE_ARRAY",
-              "Sparse arrays are not portable JSON values",
-              itemPointer,
-            );
-            break;
-          }
-          if (!("value" in descriptor) || !descriptor.enumerable) {
-            valid = fail(
-              "ACCESSOR_PROPERTY_DENIED",
-              "Accessor and non-enumerable properties are not accepted",
-              itemPointer,
-            );
-            break;
-          }
-          if (!visit(descriptor.value, depth + 1, itemPointer)) {
-            valid = false;
-            break;
-          }
-        }
-      }
-    } else if (isJsonObject(candidate)) {
-      const descriptors = Object.getOwnPropertyDescriptors(candidate);
-      const keys = Reflect.ownKeys(descriptors);
-      if (keys.some((key) => typeof key !== "string")) {
-        valid = fail(
-          "SYMBOL_PROPERTY_DENIED",
-          "Symbol properties are not JSON-serializable",
-          pointer,
-        );
-      } else if (keys.length > limits.maxPropertiesPerObject) {
-        valid = fail(
-          "PROPERTY_LIMIT_EXCEEDED",
-          `Object exceeds the ${limits.maxPropertiesPerObject} property limit`,
-          pointer,
-        );
-      } else {
-        for (const key of keys as string[]) {
-          const descriptor = descriptors[key];
-          const itemPointer = joinPointer(pointer, key);
-          if (
-            descriptor === undefined ||
-            !("value" in descriptor) ||
-            !descriptor.enumerable
-          ) {
-            valid = fail(
-              "ACCESSOR_PROPERTY_DENIED",
-              "Accessor and non-enumerable properties are not accepted",
-              itemPointer,
-            );
-            break;
-          }
-          const item = descriptor.value;
-          bytes += Buffer.byteLength(key, "utf8") + 3;
-          if (bytes > limits.maxInputBytes) {
-            valid = fail(
-              "INPUT_SIZE_LIMIT_EXCEEDED",
-              `Expanded input exceeds the ${limits.maxInputBytes} byte limit`,
-              itemPointer,
-            );
-            break;
-          }
-          if (unsafeKeys.has(key)) {
-            valid = fail(
-              "UNSAFE_OBJECT_KEY",
-              `Object key "${key}" is not permitted`,
-              itemPointer,
-            );
-            break;
-          }
-          if (item === undefined || !visit(item, depth + 1, itemPointer)) {
-            valid = false;
-            break;
-          }
-        }
-      }
-    } else {
-      valid = fail(
-        "NON_PLAIN_OBJECT",
-        "Only plain JSON objects are accepted",
-        pointer,
-      );
-    }
-
-    ancestors.delete(candidate);
-    return valid;
-  };
-
-  visit(value, 0, "");
-  return failure === undefined ? { bytes, nodes } : { bytes, failure, nodes };
+  inspectVisit(value, 0, "", limits, state);
+  return state.failure === undefined
+    ? { bytes: state.bytes, nodes: state.nodes }
+    : { bytes: state.bytes, failure: state.failure, nodes: state.nodes };
 }
 
 export function sortJsonValue(value: JsonValue): JsonValue {

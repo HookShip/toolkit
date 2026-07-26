@@ -428,6 +428,274 @@ function arrayType(
   )}[]`;
 }
 
+function referenceType(
+  schema: JsonObject,
+  pointer: string,
+  context: TypeContext,
+  depth: number,
+  references: readonly string[],
+): string {
+  const reference = schema["$ref"] as string;
+  if (!reference.startsWith("#") || !isJsonObject(context.root)) {
+    return degrade(
+      context,
+      "TYPE_REF_UNSUPPORTED",
+      "Type generation only resolves local JSON Pointer references",
+      `${pointer}/$ref`,
+    );
+  }
+  if (references.includes(reference)) {
+    return degrade(
+      context,
+      "TYPE_REF_CYCLE",
+      `Recursive reference "${reference}" degrades to unknown`,
+      `${pointer}/$ref`,
+    );
+  }
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(reference.slice(1));
+  } catch {
+    return degrade(
+      context,
+      "TYPE_REF_INVALID",
+      `Invalid reference "${reference}"`,
+      `${pointer}/$ref`,
+    );
+  }
+  const target = resolveJsonPointer(context.root, decoded);
+  if (!isJsonSchema(target)) {
+    return degrade(
+      context,
+      "TYPE_REF_NOT_FOUND",
+      `Reference "${reference}" does not resolve to a JSON Schema`,
+      `${pointer}/$ref`,
+    );
+  }
+  const nextReferences = [...references, reference];
+  const resolved = schemaType(
+    target,
+    decoded,
+    context,
+    depth + 1,
+    nextReferences,
+  );
+  const dialect =
+    typeof schema["$schema"] === "string"
+      ? schema["$schema"]
+      : isJsonObject(context.root) &&
+          typeof context.root["$schema"] === "string"
+        ? context.root["$schema"]
+        : "";
+  if (dialect.includes("draft-07")) {
+    return resolved;
+  }
+  const siblings: Record<string, JsonValue> = {};
+  for (const [key, item] of Object.entries(schema)) {
+    if (key !== "$ref" && !ANNOTATION_KEYWORDS.has(key) && item !== undefined) {
+      siblings[key] = item;
+    }
+  }
+  if (Object.keys(siblings).length === 0) {
+    return resolved;
+  }
+  const siblingType = schemaType(
+    siblings,
+    pointer,
+    context,
+    depth + 1,
+    nextReferences,
+  );
+  return `${parenthesize(resolved)} & ${parenthesize(siblingType)}`;
+}
+
+function constTypeWithSiblings(
+  schema: JsonObject,
+  pointer: string,
+  context: TypeContext,
+  depth: number,
+  references: readonly string[],
+): string {
+  const constType =
+    Array.isArray(schema["const"]) || isJsonObject(schema["const"])
+      ? complexConstType(
+          schema["const"] as JsonObject | readonly JsonValue[],
+          pointer,
+          context,
+        )
+      : literalType(schema["const"] as JsonValue);
+  return intersectWithSiblings(
+    constType,
+    schema,
+    new Set(["const"]),
+    pointer,
+    context,
+    depth,
+    references,
+  );
+}
+
+function enumTypeWithSiblings(
+  schema: JsonObject,
+  pointer: string,
+  context: TypeContext,
+  depth: number,
+  references: readonly string[],
+): string {
+  if (
+    Array.isArray(schema["enum"]) &&
+    schema["enum"].some((value) => Array.isArray(value) || isJsonObject(value))
+  ) {
+    degrade(
+      context,
+      "ENUM_COMPLEX_VALUE_APPROXIMATED",
+      "TypeScript cannot represent exact equality for object or array enum members",
+      `${pointer}/enum`,
+    );
+  }
+  const values = Array.isArray(schema["enum"]) ? schema["enum"] : [];
+  return intersectWithSiblings(
+    unique(values.map((value) => literalType(value))).join(" | "),
+    schema,
+    new Set(["enum"]),
+    pointer,
+    context,
+    depth,
+    references,
+  );
+}
+
+function allOfTypeWithSiblings(
+  schema: JsonObject,
+  pointer: string,
+  context: TypeContext,
+  depth: number,
+  references: readonly string[],
+): string {
+  if (!Array.isArray(schema["allOf"]) || schema["allOf"].length === 0) {
+    return degrade(
+      context,
+      "EMPTY_ALLOF",
+      "Empty allOf degrades to unknown",
+      `${pointer}/allOf`,
+    );
+  }
+  const primary = unique(
+    (schema["allOf"] as readonly JsonSchema[]).map((member, index) =>
+      schemaType(
+        member,
+        `${pointer}/allOf/${index}`,
+        context,
+        depth + 1,
+        references,
+      ),
+    ),
+  )
+    .map(parenthesize)
+    .join(" & ");
+  return intersectWithSiblings(
+    primary,
+    schema,
+    new Set(["allOf"]),
+    pointer,
+    context,
+    depth,
+    references,
+  );
+}
+
+function unionTypeWithSiblings(
+  schema: JsonObject,
+  union: readonly JsonValue[],
+  pointer: string,
+  context: TypeContext,
+  depth: number,
+  references: readonly string[],
+): string {
+  if (union.length === 0) {
+    return degrade(
+      context,
+      "EMPTY_UNION",
+      "Empty union degrades to unknown",
+      pointer,
+    );
+  }
+  const keyword = Array.isArray(schema["oneOf"]) ? "oneOf" : "anyOf";
+  if (keyword === "oneOf") {
+    degrade(
+      context,
+      "ONEOF_EXCLUSIVITY_NOT_EXPRESSIBLE",
+      "TypeScript unions cannot enforce JSON Schema oneOf exclusivity",
+      `${pointer}/oneOf`,
+    );
+  }
+  const primary = unique(
+    (union as readonly JsonSchema[]).map((member, index) =>
+      schemaType(
+        member,
+        `${pointer}/${keyword}/${index}`,
+        context,
+        depth + 1,
+        references,
+      ),
+    ),
+  )
+    .map(parenthesize)
+    .join(" | ");
+  return intersectWithSiblings(
+    primary,
+    schema,
+    new Set([keyword]),
+    pointer,
+    context,
+    depth,
+    references,
+  );
+}
+
+function declaredSchemaType(
+  schema: JsonObject,
+  pointer: string,
+  context: TypeContext,
+  depth: number,
+  references: readonly string[],
+): string {
+  markValidationOnlyConstraints(schema, pointer, context);
+  const generated = declaredTypes(schema).map((type) => {
+    switch (type) {
+      case "array":
+        return arrayType(schema, pointer, context, depth, references);
+      case "boolean":
+        return "boolean";
+      case "integer":
+        degrade(
+          context,
+          "INTEGER_TYPE_APPROXIMATED",
+          "TypeScript number cannot enforce integer-only values",
+          pointer,
+        );
+        return "number";
+      case "number":
+        return "number";
+      case "null":
+        return "null";
+      case "object":
+        return objectType(schema, pointer, context, depth, references);
+      case "string":
+        return "string";
+    }
+  });
+  if (generated.length === 0) {
+    return degrade(
+      context,
+      "SCHEMA_TYPE_UNSPECIFIED",
+      "Schema without a supported type degrades to unknown",
+      pointer,
+    );
+  }
+  return unique(generated).map(parenthesize).join(" | ");
+}
+
 function schemaType(
   schema: JsonSchema,
   pointer: string,
@@ -467,240 +735,34 @@ function schemaType(
   }
 
   if (typeof schema["$ref"] === "string") {
-    const reference = schema["$ref"];
-    if (!reference.startsWith("#") || !isJsonObject(context.root)) {
-      return degrade(
-        context,
-        "TYPE_REF_UNSUPPORTED",
-        "Type generation only resolves local JSON Pointer references",
-        `${pointer}/$ref`,
-      );
-    }
-    if (references.includes(reference)) {
-      return degrade(
-        context,
-        "TYPE_REF_CYCLE",
-        `Recursive reference "${reference}" degrades to unknown`,
-        `${pointer}/$ref`,
-      );
-    }
-    let decoded: string;
-    try {
-      decoded = decodeURIComponent(reference.slice(1));
-    } catch {
-      return degrade(
-        context,
-        "TYPE_REF_INVALID",
-        `Invalid reference "${reference}"`,
-        `${pointer}/$ref`,
-      );
-    }
-    const target = resolveJsonPointer(context.root, decoded);
-    if (!isJsonSchema(target)) {
-      return degrade(
-        context,
-        "TYPE_REF_NOT_FOUND",
-        `Reference "${reference}" does not resolve to a JSON Schema`,
-        `${pointer}/$ref`,
-      );
-    }
-    const nextReferences = [...references, reference];
-    const resolved = schemaType(
-      target,
-      decoded,
-      context,
-      depth + 1,
-      nextReferences,
-    );
-    const dialect =
-      typeof schema["$schema"] === "string"
-        ? schema["$schema"]
-        : isJsonObject(context.root) &&
-            typeof context.root["$schema"] === "string"
-          ? context.root["$schema"]
-          : "";
-    if (dialect.includes("draft-07")) {
-      return resolved;
-    }
-    const siblings: Record<string, JsonValue> = {};
-    for (const [key, item] of Object.entries(schema)) {
-      if (
-        key !== "$ref" &&
-        !ANNOTATION_KEYWORDS.has(key) &&
-        item !== undefined
-      ) {
-        siblings[key] = item;
-      }
-    }
-    if (Object.keys(siblings).length === 0) {
-      return resolved;
-    }
-    const siblingType = schemaType(
-      siblings,
-      pointer,
-      context,
-      depth + 1,
-      nextReferences,
-    );
-    return `${parenthesize(resolved)} & ${parenthesize(siblingType)}`;
+    return referenceType(schema, pointer, context, depth, references);
   }
-
   if (schema["const"] !== undefined) {
-    const constType =
-      Array.isArray(schema["const"]) || isJsonObject(schema["const"])
-        ? complexConstType(
-            schema["const"] as JsonObject | readonly JsonValue[],
-            pointer,
-            context,
-          )
-        : literalType(schema["const"]);
-    return intersectWithSiblings(
-      constType,
-      schema,
-      new Set(["const"]),
-      pointer,
-      context,
-      depth,
-      references,
-    );
+    return constTypeWithSiblings(schema, pointer, context, depth, references);
   }
   if (Array.isArray(schema["enum"]) && schema["enum"].length > 0) {
-    if (
-      schema["enum"].some(
-        (value) => Array.isArray(value) || isJsonObject(value),
-      )
-    ) {
-      degrade(
-        context,
-        "ENUM_COMPLEX_VALUE_APPROXIMATED",
-        "TypeScript cannot represent exact equality for object or array enum members",
-        `${pointer}/enum`,
-      );
-    }
-    return intersectWithSiblings(
-      unique(schema["enum"].map((value) => literalType(value))).join(" | "),
-      schema,
-      new Set(["enum"]),
-      pointer,
-      context,
-      depth,
-      references,
-    );
+    return enumTypeWithSiblings(schema, pointer, context, depth, references);
+  }
+  if (Array.isArray(schema["allOf"])) {
+    return allOfTypeWithSiblings(schema, pointer, context, depth, references);
   }
 
-  if (Array.isArray(schema["allOf"])) {
-    if (schema["allOf"].length === 0) {
-      return degrade(
-        context,
-        "EMPTY_ALLOF",
-        "Empty allOf degrades to unknown",
-        `${pointer}/allOf`,
-      );
-    }
-    const primary = unique(
-      (schema["allOf"] as readonly JsonSchema[]).map((member, index) =>
-        schemaType(
-          member,
-          `${pointer}/allOf/${index}`,
-          context,
-          depth + 1,
-          references,
-        ),
-      ),
-    )
-      .map(parenthesize)
-      .join(" & ");
-    return intersectWithSiblings(
-      primary,
-      schema,
-      new Set(["allOf"]),
-      pointer,
-      context,
-      depth,
-      references,
-    );
-  }
   const union = Array.isArray(schema["oneOf"])
     ? schema["oneOf"]
     : Array.isArray(schema["anyOf"])
       ? schema["anyOf"]
       : undefined;
   if (union !== undefined) {
-    if (union.length === 0) {
-      return degrade(
-        context,
-        "EMPTY_UNION",
-        "Empty union degrades to unknown",
-        pointer,
-      );
-    }
-    const keyword = Array.isArray(schema["oneOf"]) ? "oneOf" : "anyOf";
-    if (keyword === "oneOf") {
-      degrade(
-        context,
-        "ONEOF_EXCLUSIVITY_NOT_EXPRESSIBLE",
-        "TypeScript unions cannot enforce JSON Schema oneOf exclusivity",
-        `${pointer}/oneOf`,
-      );
-    }
-    const primary = unique(
-      (union as readonly JsonSchema[]).map((member, index) =>
-        schemaType(
-          member,
-          `${pointer}/${keyword}/${index}`,
-          context,
-          depth + 1,
-          references,
-        ),
-      ),
-    )
-      .map(parenthesize)
-      .join(" | ");
-    return intersectWithSiblings(
-      primary,
+    return unionTypeWithSiblings(
       schema,
-      new Set([keyword]),
+      union,
       pointer,
       context,
       depth,
       references,
     );
   }
-
-  markValidationOnlyConstraints(schema, pointer, context);
-  const generated = declaredTypes(schema).map((type) => {
-    switch (type) {
-      case "array":
-        return arrayType(schema, pointer, context, depth, references);
-      case "boolean":
-        return "boolean";
-      case "integer":
-        degrade(
-          context,
-          "INTEGER_TYPE_APPROXIMATED",
-          "TypeScript number cannot enforce integer-only values",
-          pointer,
-        );
-        return "number";
-      case "number":
-        return "number";
-      case "null":
-        return "null";
-      case "object":
-        return objectType(schema, pointer, context, depth, references);
-      case "string":
-        return "string";
-    }
-  });
-  if (generated.length === 0) {
-    return degrade(
-      context,
-      "SCHEMA_TYPE_UNSPECIFIED",
-      "Schema without a supported type degrades to unknown",
-      pointer,
-    );
-  }
-  return unique(generated).map(parenthesize).join(" | ");
+  return declaredSchemaType(schema, pointer, context, depth, references);
 }
 
 /**

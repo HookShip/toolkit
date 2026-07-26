@@ -7,6 +7,7 @@ import * as addFormatsModule from "ajv-formats";
 import {
   isJsonObject,
   isJsonSchema,
+  type JsonObject,
   isJsonValue,
   type JsonSchema,
   type JsonValue,
@@ -107,6 +108,319 @@ function mergeAllOf(
   return merged;
 }
 
+function resolveReferenceValue(
+  schema: JsonObject,
+  pointer: string,
+  context: FixtureContext,
+  depth: number,
+  references: readonly string[],
+): JsonValue | undefined {
+  const reference = schema["$ref"];
+  if (typeof reference !== "string") {
+    return addUnsupported(
+      context,
+      "FIXTURE_REF_UNSUPPORTED",
+      "Fixture generation only resolves local JSON Pointer references",
+      `${pointer}/$ref`,
+    );
+  }
+  if (!reference.startsWith("#") || !isJsonObject(context.root)) {
+    return addUnsupported(
+      context,
+      "FIXTURE_REF_UNSUPPORTED",
+      "Fixture generation only resolves local JSON Pointer references",
+      `${pointer}/$ref`,
+    );
+  }
+  if (references.includes(reference)) {
+    return addUnsupported(
+      context,
+      "FIXTURE_REF_CYCLE",
+      `Recursive reference "${reference}" exceeds deterministic fixture support`,
+      `${pointer}/$ref`,
+    );
+  }
+  const fragment = reference.slice(1);
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(fragment);
+  } catch {
+    return addUnsupported(
+      context,
+      "FIXTURE_REF_INVALID",
+      `Invalid reference "${reference}"`,
+      `${pointer}/$ref`,
+    );
+  }
+  const target = resolveJsonPointer(context.root, decoded);
+  if (!isJsonSchema(target)) {
+    return addUnsupported(
+      context,
+      "FIXTURE_REF_NOT_FOUND",
+      `Reference "${reference}" does not resolve to a JSON Schema`,
+      `${pointer}/$ref`,
+    );
+  }
+  const nextReferences = [...references, reference];
+  const dialect =
+    typeof schema["$schema"] === "string"
+      ? schema["$schema"]
+      : isJsonObject(context.root) &&
+          typeof context.root["$schema"] === "string"
+        ? context.root["$schema"]
+        : "";
+  if (dialect.includes("draft-07")) {
+    return generateValue(target, decoded, context, depth + 1, nextReferences);
+  }
+  const siblings: Record<string, JsonValue> = {};
+  for (const [key, item] of Object.entries(schema)) {
+    if (key !== "$ref" && !ANNOTATION_KEYWORDS.has(key) && item !== undefined) {
+      siblings[key] = item;
+    }
+  }
+  return Object.keys(siblings).length === 0
+    ? generateValue(target, decoded, context, depth + 1, nextReferences)
+    : mergeAllOf([target, siblings], pointer, context, depth, nextReferences);
+}
+
+function generateUnionValue(
+  schema: JsonObject,
+  union: readonly JsonValue[],
+  pointer: string,
+  context: FixtureContext,
+  depth: number,
+  references: readonly string[],
+): JsonValue | undefined {
+  for (const [index, member] of union.entries()) {
+    const isolated: FixtureContext = {
+      ...context,
+      budget: { ...context.budget },
+      diagnostics: new DiagnosticCollector(25),
+    };
+    const value = generateValue(
+      member as JsonSchema,
+      `${pointer}/${Array.isArray(schema["oneOf"]) ? "oneOf" : "anyOf"}/${index}`,
+      isolated,
+      depth + 1,
+      references,
+    );
+    if (value !== undefined) {
+      if (Array.isArray(schema["oneOf"])) {
+        let matches = 0;
+        let fullyValidated = true;
+        for (const candidate of union) {
+          const validate = validator(candidate as JsonSchema);
+          if (validate === undefined) {
+            fullyValidated = false;
+            break;
+          }
+          if (validate(value)) {
+            matches += 1;
+          }
+        }
+        if (!fullyValidated || matches !== 1) {
+          continue;
+        }
+      }
+      context.budget.bytes = isolated.budget.bytes;
+      context.budget.nodes = isolated.budget.nodes;
+      context.partial = isolated.partial;
+      context.diagnostics.addAll(isolated.diagnostics.toArray());
+      return value;
+    }
+  }
+  return addUnsupported(
+    context,
+    "UNION_FIXTURE_UNSUPPORTED",
+    "No union branch produced a deterministic fixture",
+    pointer,
+  );
+}
+
+function generateNumberValue(
+  schema: JsonObject,
+  pointer: string,
+  context: FixtureContext,
+  integer: boolean,
+): JsonValue | undefined {
+  const value = numberFixture(schema, integer);
+  return value === undefined
+    ? addUnsupported(
+        context,
+        integer
+          ? "INTEGER_FIXTURE_UNSATISFIABLE"
+          : "NUMBER_FIXTURE_UNSATISFIABLE",
+        integer
+          ? "Integer bounds do not admit a deterministic fixture"
+          : "Number bounds do not admit a deterministic fixture",
+        pointer,
+      )
+    : reserveBudget(
+          context,
+          pointer,
+          1,
+          Buffer.byteLength(String(value), "utf8"),
+        )
+      ? value
+      : undefined;
+}
+
+function generateStringValue(
+  schema: JsonObject,
+  pointer: string,
+  context: FixtureContext,
+): JsonValue | undefined {
+  const value = stringFixture(schema, pointer, context);
+  return value === undefined
+    ? addUnsupported(
+        context,
+        "STRING_FIXTURE_UNSATISFIABLE",
+        "String bounds do not admit a deterministic fixture",
+        pointer,
+      )
+    : reserveString(value, pointer, context)
+      ? value
+      : undefined;
+}
+
+function generateArrayValue(
+  schema: JsonObject,
+  pointer: string,
+  context: FixtureContext,
+  depth: number,
+  references: readonly string[],
+): JsonValue | undefined {
+  const prefixItems = Array.isArray(schema["prefixItems"])
+    ? (schema["prefixItems"] as readonly JsonSchema[])
+    : [];
+  const minimum =
+    typeof schema["minItems"] === "number" ? schema["minItems"] : 0;
+  const maximum =
+    typeof schema["maxItems"] === "number"
+      ? schema["maxItems"]
+      : Number.POSITIVE_INFINITY;
+  if (minimum > maximum) {
+    return addUnsupported(
+      context,
+      "ARRAY_FIXTURE_UNSATISFIABLE",
+      "Array minItems exceeds maxItems",
+      pointer,
+    );
+  }
+  const hasItemSchema = prefixItems.length > 0 || schema["items"] !== undefined;
+  const desired = Math.max(minimum, hasItemSchema && maximum > 0 ? 1 : 0);
+  if (desired > context.maxArrayItems) {
+    return addUnsupported(
+      context,
+      "FIXTURE_ARRAY_LIMIT_EXCEEDED",
+      `Fixture requires ${desired} items; maximum is ${context.maxArrayItems}`,
+      pointer,
+    );
+  }
+  if (desired > maximum) {
+    return addUnsupported(
+      context,
+      "ARRAY_FIXTURE_UNSATISFIABLE",
+      `Fixture requires ${desired} items but maxItems is ${maximum}`,
+      pointer,
+    );
+  }
+
+  if (!reserveBudget(context, pointer, 1, 2)) {
+    return undefined;
+  }
+  const result: JsonValue[] = [];
+  for (let index = 0; index < desired; index += 1) {
+    if (index > 0 && !reserveBudget(context, pointer, 0, 1)) {
+      return undefined;
+    }
+    const itemSchema =
+      prefixItems[index] ??
+      (isJsonSchema(schema["items"]) ? schema["items"] : undefined);
+    if (itemSchema === undefined) {
+      return addUnsupported(
+        context,
+        "ARRAY_ITEM_SCHEMA_MISSING",
+        "Array requires items without an item schema",
+        `${pointer}/items`,
+      );
+    }
+    const value = generateValue(
+      itemSchema,
+      `${pointer}/items/${index}`,
+      context,
+      depth + 1,
+      references,
+    );
+    if (value === undefined) {
+      return undefined;
+    }
+    result.push(value);
+  }
+  return result;
+}
+
+function generateObjectValue(
+  schema: JsonObject,
+  pointer: string,
+  context: FixtureContext,
+  depth: number,
+  references: readonly string[],
+): JsonValue | undefined {
+  const properties = isJsonObject(schema["properties"])
+    ? schema["properties"]
+    : {};
+  const required = new Set(
+    Array.isArray(schema["required"])
+      ? schema["required"].filter(
+          (item): item is string => typeof item === "string",
+        )
+      : [],
+  );
+  const result: Record<string, JsonValue> = {};
+  if (!reserveBudget(context, pointer, 1, 2)) {
+    return undefined;
+  }
+  let propertyIndex = 0;
+  for (const name of Object.keys(properties).sort(compareCodeUnits)) {
+    if (!required.has(name) && !context.includeOptional) {
+      continue;
+    }
+    if (
+      !reserveBudget(
+        context,
+        pointer,
+        0,
+        jsonStringBytes(name) + 1 + (propertyIndex === 0 ? 0 : 1),
+      )
+    ) {
+      return undefined;
+    }
+    const propertySchema = properties[name];
+    if (!isJsonSchema(propertySchema)) {
+      return addUnsupported(
+        context,
+        "PROPERTY_SCHEMA_INVALID",
+        `Property "${name}" is not a JSON Schema`,
+        `${pointer}/properties/${escapePointerToken(name)}`,
+      );
+    }
+    const value = generateValue(
+      propertySchema,
+      `${pointer}/properties/${escapePointerToken(name)}`,
+      context,
+      depth + 1,
+      references,
+    );
+    if (value === undefined) {
+      return undefined;
+    }
+    result[name] = value;
+    propertyIndex += 1;
+  }
+  return result;
+}
+
 function generateValue(
   schema: JsonSchema,
   pointer: string,
@@ -176,68 +490,7 @@ function generateValue(
   }
 
   if (typeof schema["$ref"] === "string") {
-    const reference = schema["$ref"];
-    if (!reference.startsWith("#") || !isJsonObject(context.root)) {
-      return addUnsupported(
-        context,
-        "FIXTURE_REF_UNSUPPORTED",
-        "Fixture generation only resolves local JSON Pointer references",
-        `${pointer}/$ref`,
-      );
-    }
-    if (references.includes(reference)) {
-      return addUnsupported(
-        context,
-        "FIXTURE_REF_CYCLE",
-        `Recursive reference "${reference}" exceeds deterministic fixture support`,
-        `${pointer}/$ref`,
-      );
-    }
-    const fragment = reference.slice(1);
-    let decoded: string;
-    try {
-      decoded = decodeURIComponent(fragment);
-    } catch {
-      return addUnsupported(
-        context,
-        "FIXTURE_REF_INVALID",
-        `Invalid reference "${reference}"`,
-        `${pointer}/$ref`,
-      );
-    }
-    const target = resolveJsonPointer(context.root, decoded);
-    if (!isJsonSchema(target)) {
-      return addUnsupported(
-        context,
-        "FIXTURE_REF_NOT_FOUND",
-        `Reference "${reference}" does not resolve to a JSON Schema`,
-        `${pointer}/$ref`,
-      );
-    }
-    const nextReferences = [...references, reference];
-    const dialect =
-      typeof schema["$schema"] === "string"
-        ? schema["$schema"]
-        : isJsonObject(context.root) &&
-            typeof context.root["$schema"] === "string"
-          ? context.root["$schema"]
-          : "";
-    if (dialect.includes("draft-07")) {
-      return generateValue(target, decoded, context, depth + 1, nextReferences);
-    }
-    const siblings: Record<string, JsonValue> = {};
-    for (const [key, item] of Object.entries(schema)) {
-      if (
-        key !== "$ref" &&
-        !ANNOTATION_KEYWORDS.has(key) &&
-        item !== undefined
-      ) {
-        siblings[key] = item;
-      }
-    }
-    return Object.keys(siblings).length === 0
-      ? generateValue(target, decoded, context, depth + 1, nextReferences)
-      : mergeAllOf([target, siblings], pointer, context, depth, nextReferences);
+    return resolveReferenceValue(schema, pointer, context, depth, references);
   }
 
   if (Array.isArray(schema["allOf"])) {
@@ -256,49 +509,13 @@ function generateValue(
       ? schema["anyOf"]
       : undefined;
   if (union !== undefined) {
-    for (const [index, member] of union.entries()) {
-      const isolated: FixtureContext = {
-        ...context,
-        budget: { ...context.budget },
-        diagnostics: new DiagnosticCollector(25),
-      };
-      const value = generateValue(
-        member as JsonSchema,
-        `${pointer}/${Array.isArray(schema["oneOf"]) ? "oneOf" : "anyOf"}/${index}`,
-        isolated,
-        depth + 1,
-        references,
-      );
-      if (value !== undefined) {
-        if (Array.isArray(schema["oneOf"])) {
-          let matches = 0;
-          let fullyValidated = true;
-          for (const candidate of union) {
-            const validate = validator(candidate as JsonSchema);
-            if (validate === undefined) {
-              fullyValidated = false;
-              break;
-            }
-            if (validate(value)) {
-              matches += 1;
-            }
-          }
-          if (!fullyValidated || matches !== 1) {
-            continue;
-          }
-        }
-        context.budget.bytes = isolated.budget.bytes;
-        context.budget.nodes = isolated.budget.nodes;
-        context.partial = isolated.partial;
-        context.diagnostics.addAll(isolated.diagnostics.toArray());
-        return value;
-      }
-    }
-    return addUnsupported(
-      context,
-      "UNION_FIXTURE_UNSUPPORTED",
-      "No union branch produced a deterministic fixture",
+    return generateUnionValue(
+      schema,
+      union,
       pointer,
+      context,
+      depth,
+      references,
     );
   }
 
@@ -309,180 +526,16 @@ function generateValue(
       return reserveBudget(context, pointer, 1, 4) ? null : undefined;
     case "boolean":
       return reserveBudget(context, pointer, 1, 5) ? false : undefined;
-    case "integer": {
-      const value = numberFixture(schema, true);
-      return value === undefined
-        ? addUnsupported(
-            context,
-            "INTEGER_FIXTURE_UNSATISFIABLE",
-            "Integer bounds do not admit a deterministic fixture",
-            pointer,
-          )
-        : reserveBudget(
-              context,
-              pointer,
-              1,
-              Buffer.byteLength(String(value), "utf8"),
-            )
-          ? value
-          : undefined;
-    }
-    case "number": {
-      const value = numberFixture(schema, false);
-      return value === undefined
-        ? addUnsupported(
-            context,
-            "NUMBER_FIXTURE_UNSATISFIABLE",
-            "Number bounds do not admit a deterministic fixture",
-            pointer,
-          )
-        : reserveBudget(
-              context,
-              pointer,
-              1,
-              Buffer.byteLength(String(value), "utf8"),
-            )
-          ? value
-          : undefined;
-    }
-    case "string": {
-      const value = stringFixture(schema, pointer, context);
-      return value === undefined
-        ? addUnsupported(
-            context,
-            "STRING_FIXTURE_UNSATISFIABLE",
-            "String bounds do not admit a deterministic fixture",
-            pointer,
-          )
-        : reserveString(value, pointer, context)
-          ? value
-          : undefined;
-    }
-    case "array": {
-      const prefixItems = Array.isArray(schema["prefixItems"])
-        ? (schema["prefixItems"] as readonly JsonSchema[])
-        : [];
-      const minimum =
-        typeof schema["minItems"] === "number" ? schema["minItems"] : 0;
-      const maximum =
-        typeof schema["maxItems"] === "number"
-          ? schema["maxItems"]
-          : Number.POSITIVE_INFINITY;
-      if (minimum > maximum) {
-        return addUnsupported(
-          context,
-          "ARRAY_FIXTURE_UNSATISFIABLE",
-          "Array minItems exceeds maxItems",
-          pointer,
-        );
-      }
-      const hasItemSchema =
-        prefixItems.length > 0 || schema["items"] !== undefined;
-      const desired = Math.max(minimum, hasItemSchema && maximum > 0 ? 1 : 0);
-      if (desired > context.maxArrayItems) {
-        return addUnsupported(
-          context,
-          "FIXTURE_ARRAY_LIMIT_EXCEEDED",
-          `Fixture requires ${desired} items; maximum is ${context.maxArrayItems}`,
-          pointer,
-        );
-      }
-      if (desired > maximum) {
-        return addUnsupported(
-          context,
-          "ARRAY_FIXTURE_UNSATISFIABLE",
-          `Fixture requires ${desired} items but maxItems is ${maximum}`,
-          pointer,
-        );
-      }
-
-      if (!reserveBudget(context, pointer, 1, 2)) {
-        return undefined;
-      }
-      const result: JsonValue[] = [];
-      for (let index = 0; index < desired; index += 1) {
-        if (index > 0 && !reserveBudget(context, pointer, 0, 1)) {
-          return undefined;
-        }
-        const itemSchema =
-          prefixItems[index] ??
-          (isJsonSchema(schema["items"]) ? schema["items"] : undefined);
-        if (itemSchema === undefined) {
-          return addUnsupported(
-            context,
-            "ARRAY_ITEM_SCHEMA_MISSING",
-            "Array requires items without an item schema",
-            `${pointer}/items`,
-          );
-        }
-        const value = generateValue(
-          itemSchema,
-          `${pointer}/items/${index}`,
-          context,
-          depth + 1,
-          references,
-        );
-        if (value === undefined) {
-          return undefined;
-        }
-        result.push(value);
-      }
-      return result;
-    }
-    case "object": {
-      const properties = isJsonObject(schema["properties"])
-        ? schema["properties"]
-        : {};
-      const required = new Set(
-        Array.isArray(schema["required"])
-          ? schema["required"].filter(
-              (item): item is string => typeof item === "string",
-            )
-          : [],
-      );
-      const result: Record<string, JsonValue> = {};
-      if (!reserveBudget(context, pointer, 1, 2)) {
-        return undefined;
-      }
-      let propertyIndex = 0;
-      for (const name of Object.keys(properties).sort(compareCodeUnits)) {
-        if (!required.has(name) && !context.includeOptional) {
-          continue;
-        }
-        if (
-          !reserveBudget(
-            context,
-            pointer,
-            0,
-            jsonStringBytes(name) + 1 + (propertyIndex === 0 ? 0 : 1),
-          )
-        ) {
-          return undefined;
-        }
-        const propertySchema = properties[name];
-        if (!isJsonSchema(propertySchema)) {
-          return addUnsupported(
-            context,
-            "PROPERTY_SCHEMA_INVALID",
-            `Property "${name}" is not a JSON Schema`,
-            `${pointer}/properties/${escapePointerToken(name)}`,
-          );
-        }
-        const value = generateValue(
-          propertySchema,
-          `${pointer}/properties/${escapePointerToken(name)}`,
-          context,
-          depth + 1,
-          references,
-        );
-        if (value === undefined) {
-          return undefined;
-        }
-        result[name] = value;
-        propertyIndex += 1;
-      }
-      return result;
-    }
+    case "integer":
+      return generateNumberValue(schema, pointer, context, true);
+    case "number":
+      return generateNumberValue(schema, pointer, context, false);
+    case "string":
+      return generateStringValue(schema, pointer, context);
+    case "array":
+      return generateArrayValue(schema, pointer, context, depth, references);
+    case "object":
+      return generateObjectValue(schema, pointer, context, depth, references);
     default:
       return addUnsupported(
         context,
