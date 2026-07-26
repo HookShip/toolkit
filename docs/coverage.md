@@ -46,8 +46,8 @@ artifacts and repository policy rather than workspace runtime source.
 
 ## Measured baseline
 
-Measured on 2026-07-19 with Node.js `22.23.1` and pnpm `11.13.0`: 607 discovered
-tests and 136 source files. Values are **lines / statements / functions /
+Measured on 2026-07-26 with Node.js `22.23.1` and pnpm `11.13.0`: 837 discovered
+tests and 243 source files. Values are **lines / statements / functions /
 branches**. Floors are conservative whole-number lower bounds, except the
 portal-components line floor remains 78 because its displayed 79.00% value is
 78.995% before rounding.
