@@ -13,6 +13,7 @@
     "build": "turbo run build",
     "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm check:boundaries && pnpm check:sizes && pnpm check:docs && pnpm check:secrets && pnpm check:release && pnpm build",
     "check:boundaries": "node --test scripts/check-package-boundaries.test.mjs && node scripts/check-package-boundaries.mjs",
+    "check:audit": "node --test scripts/check-vulnerabilities.test.mjs && node scripts/check-vulnerabilities.mjs",
     "check:compose": "./infra/validate-compose.sh",
     "check:docs": "node --test scripts/check-docs.test.mjs && node scripts/check-docs.mjs",
     "check:release": "node --test scripts/release.test.mjs scripts/release-modules.test.mjs && node scripts/release.mjs check",

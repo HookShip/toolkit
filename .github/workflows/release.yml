@@ -53,6 +53,10 @@ jobs:
       - run: corepack enable
       - run: pnpm install --frozen-lockfile
       - run: pnpm check
+      # Deterministic, prod-scoped high/critical dependency vulnerability gate.
+      # Fails closed on any high/critical production advisory that is not covered
+      # by a reviewed, time-bounded exception in the allowlist.
+      - run: pnpm check:audit
       - run: pnpm smoke
       - run: pnpm pack:smoke
       - run: pnpm release:dry-run

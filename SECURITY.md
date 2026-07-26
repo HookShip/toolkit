@@ -40,3 +40,29 @@ and Gitleaks across the complete Git history. The narrow allowlists in
 `.gitleaks.toml` combine an exact file path, exact deterministic test value, and
 the specific Gitleaks rule. They do not allow whole test directories, commits,
 or generic secret formats.
+
+## Dependency vulnerability policy
+
+`pnpm check:audit` (`scripts/check-vulnerabilities.mjs`) is a deterministic,
+production-scoped dependency vulnerability gate. It runs `pnpm audit --prod` and
+fails closed on any **high** or **critical** advisory affecting a production
+dependency. Development-only tooling advisories do not block a release.
+
+The only escape hatch is `scripts/vulnerability-allowlist.json`: each exception
+must name a GHSA id, a reason, and an ISO expiry date. An expired exception that
+is still needed fails the gate, and an exception that no longer matches any
+advisory is reported for removal, so nothing is ignored silently or
+indefinitely. The gate runs in CI (the `dependency-audit` job) and in the
+release verify job; because it needs registry network access it is not part of
+the offline `pnpm check`.
+
+The gate is explicit about scope: it **blocks** only on production high/critical
+advisories, but it also runs an all-scope audit and **reports** any development-
+only high/critical advisory as a non-blocking notice, so dev-tooling issues are
+visible rather than hidden. As a matter of hygiene the project also keeps the
+whole dependency tree free of known high/critical advisories, remediating
+dev-only findings with the same override mechanism.
+
+Transitive vulnerabilities are remediated by upgrading the parent dependency or
+by adding a narrowly scoped, patched-version `overrides` entry in
+`pnpm-workspace.yaml` whose selector matches only the vulnerable range.

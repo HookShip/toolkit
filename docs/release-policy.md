@@ -125,16 +125,17 @@ runs the gates and a publish plan only.
 
 ## Local verification
 
-| Command                | What it proves                                                                                                                        |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `pnpm check:release`   | Manifest, ownership, versions, scope, lifecycle state, and changelog are consistent (unit tests + `check`).                           |
-| `pnpm release:dry-run` | Tarballs, checksums, SBOM, provenance, and `npm publish --dry-run` all succeed locally.                                               |
-| `pnpm release:prepare` | Preview or apply an atomic coordinated version bump.                                                                                  |
-| `pnpm release:stage`   | Preview or apply the `unreleased -> ready` transition (add `-- --dry-run` to preview).                                                |
-| `pnpm release:next`    | Preview or apply the `ready -> unreleased` transition and next-cohort bump.                                                           |
-| `pnpm release:publish` | Non-mutating publish plan: order and per-package registry state.                                                                      |
-| `pnpm test:verdaccio`  | Publishes the whole cohort to a throwaway local Verdaccio and installs, imports, and invokes it from a clean consumer, at zero spend. |
-| `pnpm pack:smoke`      | Every tarball installs together and every entry point and the CLI work.                                                               |
+| Command                | What it proves                                                                                                                                |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm check:release`   | Manifest, ownership, versions, scope, lifecycle state, and changelog are consistent (unit tests + `check`).                                   |
+| `pnpm release:dry-run` | Tarballs, checksums, SBOM, provenance, and `npm publish --dry-run` all succeed locally.                                                       |
+| `pnpm release:prepare` | Preview or apply an atomic coordinated version bump.                                                                                          |
+| `pnpm release:stage`   | Preview or apply the `unreleased -> ready` transition (add `-- --dry-run` to preview).                                                        |
+| `pnpm release:next`    | Preview or apply the `ready -> unreleased` transition and next-cohort bump.                                                                   |
+| `pnpm release:publish` | Non-mutating publish plan: order and per-package registry state.                                                                              |
+| `pnpm check:audit`     | Deterministic prod-scoped high/critical dependency vulnerability gate (needs registry network access; runs in CI and the release verify job). |
+| `pnpm test:verdaccio`  | Publishes the whole cohort to a throwaway local Verdaccio and installs, imports, and invokes it from a clean consumer, at zero spend.         |
+| `pnpm pack:smoke`      | Every tarball installs together and every entry point and the CLI work.                                                                       |
 
 `pnpm release:clean` removes local release artifacts.
 

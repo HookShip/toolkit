@@ -61,6 +61,11 @@ Release status: unreleased.
 - Release policy and compatibility matrix documentation owned by this repository
   (`docs/release-policy.md`, `docs/compatibility-matrix.md`) and ADR-0008 on
   release ownership and automation.
+- Deterministic production dependency vulnerability gate
+  (`scripts/check-vulnerabilities.mjs`, `pnpm check:audit`) that fails closed on
+  any high/critical production advisory not covered by a reviewed, time-bounded
+  exception in `scripts/vulnerability-allowlist.json`. Wired into the CI
+  `dependency-audit` job and the release verify job.
 
 ### Changed
 
