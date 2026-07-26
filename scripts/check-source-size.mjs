@@ -5,7 +5,16 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const scanRoots = [path.join(root, "packages"), path.join(root, "apps")];
+// Production source lives in the workspaces (packages, apps), the repository
+// tooling (scripts), and the shipped extension tooling (extensions). Generated
+// output and data fixtures within these roots are excluded below so only real
+// production source is ratcheted.
+const scanRoots = [
+  path.join(root, "packages"),
+  path.join(root, "apps"),
+  path.join(root, "scripts"),
+  path.join(root, "extensions"),
+];
 
 /**
  * Maximum line count for a toolkit source file. Files above this must be
@@ -45,6 +54,12 @@ const ignoredDirectories = new Set([
   "test",
   "tests",
   "__tests__",
+  // Data fixtures and generated/template artifacts under extensions/ are data,
+  // not production source, and are excluded explicitly.
+  "fixtures",
+  "test-fixtures",
+  "assets",
+  "templates",
 ]);
 
 function isSourceFile(relativePath) {
