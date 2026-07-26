@@ -18,8 +18,10 @@ import {
   validateRepository,
 } from "./release-manifest.mjs";
 import {
+  ciBuildContext,
   declaredLicense,
   dependencyPackages,
+  provenanceStatement,
   purlName,
   resolveDependencyMetadata,
   sbomFor,
@@ -276,6 +278,53 @@ test("resolveDependencyMetadata reads exact versions and licenses from the insta
     "packages/cli",
   );
   assert.equal(missing["definitely-not-installed-xyz"], undefined);
+});
+
+test("ciBuildContext reports CI metadata only when present and never invents it", () => {
+  const local = ciBuildContext({ GITHUB_ACTIONS: "false" });
+  assert.equal(local.onCi, false);
+  assert.equal(local.invocationId, null);
+  assert.equal(local.builderId, "urn:hookship-toolkit:local-release-script");
+
+  const ci = ciBuildContext({
+    GITHUB_ACTIONS: "true",
+    GITHUB_RUN_ID: "42",
+    GITHUB_SERVER_URL: "https://github.com",
+    GITHUB_REPOSITORY: "HookShip/toolkit",
+    GITHUB_WORKFLOW_REF:
+      "HookShip/toolkit/.github/workflows/release.yml@refs/tags/v1.2.3",
+  });
+  assert.equal(ci.onCi, true);
+  assert.equal(
+    ci.invocationId,
+    "https://github.com/HookShip/toolkit/actions/runs/42",
+  );
+  assert.match(ci.builderId, /release\.yml@refs\/tags\/v1\.2\.3$/u);
+});
+
+test("provenanceStatement marks itself supplementary and unsigned vs npm OIDC", () => {
+  const statement = provenanceStatement({
+    entry: { name: "@webhook-portal/example", version: "1.2.3" },
+    checksum: "sha256-abc",
+    relativeTarball: "tarballs/example/x.tgz",
+    commit: "deadbeef",
+    dirty: false,
+    lockChecksum: "sha256-lock",
+    ci: { builderId: "urn:x", invocationId: null },
+  });
+  assert.equal(statement.predicateType, "https://slsa.dev/provenance/v1");
+  const attestation =
+    statement.predicate.buildDefinition.internalParameters.attestation;
+  assert.equal(attestation.signed, false);
+  assert.equal(attestation.supplementary, true);
+  assert.equal(
+    attestation.authoritativeProvenance,
+    "npm registry OIDC provenance",
+  );
+  assert.equal(
+    statement.predicate.buildDefinition.resolvedDependencies[0].digest.sha256,
+    "sha256-lock",
+  );
 });
 
 test("release-publish orders the graph topologically and preflights publishes", () => {

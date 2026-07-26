@@ -91,7 +91,12 @@ a real apply, on a dirty tree. Ordinary development checks accept both states.
   mismatched tag, the `unreleased` state, or any package/manifest version
   mismatch all abort the run.
 - **Provenance / OIDC.** Real publishing packs the verified tarballs and runs
-  `npm publish --provenance`, which relies on CI OIDC (`id-token: write`).
+  `npm publish --provenance`, which relies on CI OIDC (`id-token: write`). The
+  npm registry provenance is the **authoritative** attestation. The SBOM,
+  checksums, and `*.provenance.json` statements the release script attaches to
+  the GitHub release are **supplementary and unsigned** (they declare this in
+  their `attestation` block); see
+  [`generated-artifacts.md`](generated-artifacts.md).
 - **No stored tokens.** The script only reads an ambient publishing context (an
   OIDC token or an already-authenticated npm user) and never reads, writes, or
   persists a token. There is no npm token in this repository.

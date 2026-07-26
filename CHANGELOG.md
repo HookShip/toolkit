@@ -75,6 +75,9 @@ Release status: unreleased.
 - Generated SPDX SBOMs now record each dependency's exact installed version and
   declared license (resolved from the frozen install tree) plus a `purl`
   identity, instead of the declared semver range.
+- Generated `*.provenance.json` statements now mark themselves supplementary and
+  unsigned and name npm registry OIDC provenance as authoritative, and populate
+  a real GitHub Actions builder id and invocation id when run in CI.
 - Extracted the public toolkit from assumptions about absent private
   applications, packages, infrastructure, and operational documents.
 - Coordinated all 14 public packages in one release manifest while retaining

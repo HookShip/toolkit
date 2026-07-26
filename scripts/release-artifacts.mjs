@@ -195,6 +195,78 @@ export function sbomFor(pkg, checksum, resolved = {}) {
   };
 }
 
+// Derives a trustworthy builder identity and invocation id from the GitHub
+// Actions environment when present, and otherwise reports the local release
+// script. It never fabricates CI metadata: outside CI the invocation id is null
+// and the builder is the local URN.
+export function ciBuildContext(env = process.env) {
+  if (env.GITHUB_ACTIONS === "true" && env.GITHUB_RUN_ID) {
+    const server = env.GITHUB_SERVER_URL ?? "https://github.com";
+    const repository = env.GITHUB_REPOSITORY ?? null;
+    const workflowRef = env.GITHUB_WORKFLOW_REF ?? null;
+    return {
+      builderId: workflowRef
+        ? `${server}/${workflowRef}`
+        : repository
+          ? `${server}/${repository}`
+          : "urn:hookship-toolkit:github-actions",
+      invocationId: repository
+        ? `${server}/${repository}/actions/runs/${env.GITHUB_RUN_ID}`
+        : null,
+      onCi: true,
+    };
+  }
+  return {
+    builderId: "urn:hookship-toolkit:local-release-script",
+    invocationId: null,
+    onCi: false,
+  };
+}
+
+// Builds the in-toto/SLSA provenance statement for one packed tarball. This is a
+// supplementary, unsigned build record: the authoritative, cryptographically
+// verifiable provenance is the npm registry OIDC provenance produced by
+// `npm publish --provenance`. That distinction is recorded machine-readably in
+// internalParameters.attestation so consumers do not over-trust this file.
+export function provenanceStatement({
+  entry,
+  checksum,
+  relativeTarball,
+  commit,
+  dirty,
+  lockChecksum,
+  ci = ciBuildContext(),
+}) {
+  return {
+    _type: "https://in-toto.io/Statement/v1",
+    subject: [{ name: relativeTarball, digest: { sha256: checksum } }],
+    predicateType: "https://slsa.dev/provenance/v1",
+    predicate: {
+      buildDefinition: {
+        buildType: "urn:hookship-toolkit:release-script:v1",
+        externalParameters: { package: entry.name, version: entry.version },
+        internalParameters: {
+          gitCommit: commit,
+          gitWorkingTreeDirty: dirty,
+          attestation: {
+            authoritativeProvenance: "npm registry OIDC provenance",
+            generatedBy: "hookship-toolkit release script",
+            signed: false,
+            supplementary: true,
+          },
+        },
+        resolvedDependencies: [
+          { uri: "pnpm-lock.yaml", digest: { sha256: lockChecksum } },
+        ],
+      },
+      runDetails: {
+        builder: { id: ci.builderId },
+        metadata: { invocationId: ci.invocationId },
+      },
+    },
+  };
+}
+
 export async function buildArtifacts({ publishDryRun }) {
   await check();
   const manifest = await loadManifest();
@@ -252,28 +324,14 @@ export async function buildArtifacts({ publishDryRun }) {
       path.join(metadataRoot, `${safeName}-${entry.version}.spdx.json`),
       `${JSON.stringify(sbomFor(packedManifest, checksum, resolvedDependencies), null, 2)}\n`,
     );
-    const provenance = {
-      _type: "https://in-toto.io/Statement/v1",
-      subject: [{ name: relativeTarball, digest: { sha256: checksum } }],
-      predicateType: "https://slsa.dev/provenance/v1",
-      predicate: {
-        buildDefinition: {
-          buildType: "urn:hookship-toolkit:release-script:v1",
-          externalParameters: { package: entry.name, version: entry.version },
-          internalParameters: {
-            gitCommit: commit,
-            gitWorkingTreeDirty: status === null ? null : status.length > 0,
-          },
-          resolvedDependencies: [
-            { uri: "pnpm-lock.yaml", digest: { sha256: lockChecksum } },
-          ],
-        },
-        runDetails: {
-          builder: { id: "urn:hookship-toolkit:local-release-script" },
-          metadata: { invocationId: null },
-        },
-      },
-    };
+    const provenance = provenanceStatement({
+      entry,
+      checksum,
+      relativeTarball,
+      commit,
+      dirty: status === null ? null : status.length > 0,
+      lockChecksum,
+    });
     await writeFile(
       path.join(metadataRoot, `${safeName}-${entry.version}.provenance.json`),
       `${JSON.stringify(provenance, null, 2)}\n`,

@@ -49,6 +49,20 @@ is why those outputs are git-ignored.
   [`scripts/release-artifacts.mjs`](../scripts/release-artifacts.mjs) (invoked
   through `release:dry-run`/`release:artifacts`). See
   [`release-policy.md`](release-policy.md).
+- **Two provenance layers, one authoritative.** The generated
+  `*.provenance.json` statements are a **supplementary, unsigned** build record:
+  they mark themselves as such in
+  `predicate.buildDefinition.internalParameters.attestation` (`signed: false`,
+  `supplementary: true`,
+  `authoritativeProvenance: "npm registry OIDC provenance"`). The
+  **authoritative, cryptographically verifiable** provenance is the npm registry
+  provenance produced by `npm publish --provenance`, which is backed by GitHub
+  OIDC (`id-token: write`) in
+  [`.github/workflows/release.yml`](../.github/workflows/release.yml). Do not
+  treat the attached JSON as a signed attestation. When the release runs in
+  GitHub Actions, the statement's builder id and invocation id are populated
+  from the workflow ref and run URL; outside CI the builder is the local release
+  script and the invocation id is `null` (never fabricated).
 - **SBOM contents are resolved, not merely declared.** Each dependency in a
   generated SPDX SBOM records the exact version and declared license read from
   the frozen install tree (`pnpm install --frozen-lockfile`), plus a `purl`
