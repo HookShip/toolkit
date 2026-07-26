@@ -195,7 +195,7 @@ Coverage includes every workspace with a Vitest suite. Per-workspace and
 aggregate regression floors are documented in
 [`docs/coverage.md`](docs/coverage.md).
 
-[`release/manifest.json`](release/manifest.json) lists exactly the 13 public
+[`release/manifest.json`](release/manifest.json) lists exactly the 14 public
 packages and, in its `ownership` block, names this repository the sole publisher
 and source of truth for the cohort. [`scripts/release.mjs`](scripts/release.mjs)
 rejects missing, extra, private, non-Apache, out-of-scope, or ownership-drifted
@@ -206,7 +206,7 @@ paths described in [`docs/release-policy.md`](docs/release-policy.md).
 ## Repository layout
 
 ```text
-packages/    13 public Apache-2.0 packages
+packages/    14 public Apache-2.0 packages
 apps/        private Apache-2.0 reference-server packaging wrapper
 infra/       optional local reference Compose stack and migrations
 examples/    public contracts, metadata, learning inputs, and demo scripts

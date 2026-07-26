@@ -35,7 +35,7 @@ Release status: unreleased.
 - Private Apache-2.0 reference-server process wrapper and optional local
   PostgreSQL/MinIO/TLS Compose stack.
 - Standalone workspace, boundary, secret-hygiene, coverage, smoke, package,
-  release, and CI validation for all 13 public packages.
+  release, and CI validation for all 14 public packages.
 - Release ownership block in `release/manifest.json` (schema 2) naming this
   repository the sole publisher and source of truth for the `@webhook-portal`
   cohort, enforced by `scripts/release.mjs check`.
@@ -61,6 +61,9 @@ Release status: unreleased.
 - Release policy and compatibility matrix documentation owned by this repository
   (`docs/release-policy.md`, `docs/compatibility-matrix.md`) and ADR-0008 on
   release ownership and automation.
+- Documentation package-count gate in `scripts/check-docs.mjs`: prose
+  cohort-size claims and the README package table are checked against the
+  enforced `publicPackageCount`, so a docs edit cannot drift from the manifest.
 - Deterministic production dependency vulnerability gate
   (`scripts/check-vulnerabilities.mjs`, `pnpm check:audit`) that fails closed on
   any high/critical production advisory not covered by a reviewed, time-bounded
@@ -71,7 +74,7 @@ Release status: unreleased.
 
 - Extracted the public toolkit from assumptions about absent private
   applications, packages, infrastructure, and operational documents.
-- Coordinated all 13 public packages in one release manifest while retaining
+- Coordinated all 14 public packages in one release manifest while retaining
   their existing `@webhook-portal/*` names.
 - Documented that this repository is the sole publisher of the cohort; other
   repositories consume the published packages rather than re-publishing them.

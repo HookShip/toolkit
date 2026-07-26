@@ -1,7 +1,7 @@
 # Contributing
 
 Thank you for contributing to HookShip Toolkit. This repository is entirely
-Apache-2.0 and contains 13 public packages plus the private Apache-2.0
+Apache-2.0 and contains 14 public packages plus the private Apache-2.0
 `apps/reference-server` packaging wrapper.
 
 ## Setup

@@ -8,12 +8,15 @@ import {
   checkLinks,
   checkNavigation,
   checkNoInventedReferences,
+  checkPackageCountClaims,
+  checkReadmePackageTable,
   hookServiceRolePhrase,
   requiredNavigation,
   stripCode,
   verifiedRepos,
   verifyHookshipRepo,
 } from "./check-docs.mjs";
+import { publicPackageCount } from "./release-context.mjs";
 
 test("the repository documentation passes every offline check", async () => {
   assert.deepEqual(await checkDocs(), []);
@@ -133,4 +136,40 @@ test("checkNavigation requires the org policies, hook-service, and its role", ()
   const missing = checkNavigation("nothing here");
   assert.equal(missing.length, requiredNavigation.length + 1);
   assert.ok(missing.some((f) => /delivery data plane/.test(f)));
+});
+
+test("checkPackageCountClaims flags counts that disagree with the enforced cohort", () => {
+  const wrong = publicPackageCount - 1;
+  for (const phrase of [
+    `lists exactly the ${wrong} public packages`,
+    `all ${wrong} public packages`,
+    `Keep all ${wrong} package manifests`,
+    `All ${wrong} packages are Apache-2.0`,
+    `${wrong} public Apache-2.0 packages`,
+  ]) {
+    const failures = checkPackageCountClaims("d.md", phrase);
+    assert.ok(
+      failures.some((f) => /disagrees with the enforced cohort size/.test(f)),
+      `expected "${phrase}" to be flagged`,
+    );
+  }
+});
+
+test("checkPackageCountClaims accepts the correct cohort size", () => {
+  const n = publicPackageCount;
+  assert.deepEqual(
+    checkPackageCountClaims("d.md", `lists exactly the ${n} public packages`),
+    [],
+  );
+  assert.deepEqual(
+    checkPackageCountClaims("d.md", `All ${n} packages are Apache-2.0`),
+    [],
+  );
+});
+
+test("checkReadmePackageTable matches the enforced cohort size", async () => {
+  assert.deepEqual(await checkReadmePackageTable(), []);
+  const mismatch = await checkReadmePackageTable(publicPackageCount + 1);
+  assert.equal(mismatch.length, 1);
+  assert.match(mismatch[0], /package table lists/);
 });

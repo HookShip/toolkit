@@ -21,7 +21,7 @@ for a coordinated `0.1.0` release.
 
 ## Next: first public package release
 
-- Keep all 13 package manifests, exports, types, licenses, and tarballs
+- Keep all 14 package manifests, exports, types, licenses, and tarballs
   independently installable.
 - Review API consistency and changelog entries across the coordinated cohort.
 - Run the complete CI, coverage, smoke, pack-smoke, and release dry-run gates

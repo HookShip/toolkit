@@ -19,6 +19,8 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
+import { publicPackageCount } from "./release-context.mjs";
+
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 // The only HookShip repositories that exist; any other is an invented URL.
@@ -227,6 +229,56 @@ export function checkNavigation(corpus) {
   return failures;
 }
 
+// Prose package-count claims must agree with the machine-enforced cohort size
+// (`publicPackageCount`), so a documentation edit cannot silently drift away
+// from the manifest the release tooling actually enforces. The patterns match
+// the exact phrasings the docs use to describe the cohort.
+export function checkPackageCountClaims(
+  relativeFile,
+  text,
+  expected = publicPackageCount,
+) {
+  const failures = [];
+  const claimPatterns = [
+    // A leading (?<![\w.-]) prevents matching the trailing "0" of a version
+    // such as "Apache-2.0 public packages", which carries no package count.
+    /(?<![\w.-])(\d{1,3}) public(?: Apache-2\.0)? packages\b/gi,
+    /\ball (\d{1,3}) (?:public )?package(?:s| manifests)\b/gi,
+    /\bexactly the (\d{1,3}) public\b/gi,
+    /\bAll (\d{1,3}) packages\b/g,
+  ];
+  const seen = new Set();
+  for (const pattern of claimPatterns) {
+    for (const match of text.matchAll(pattern)) {
+      const key = `${match.index}:${match[0]}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      if (Number(match[1]) !== expected) {
+        failures.push(
+          `${relativeFile}: package-count claim "${match[0].trim()}" disagrees with the enforced cohort size (${expected})`,
+        );
+      }
+    }
+  }
+  return failures;
+}
+
+// The README package table is the canonical human-readable inventory. Its row
+// count must equal the enforced cohort size so adding or removing a package
+// without updating the table fails the docs gate.
+export async function checkReadmePackageTable(expected = publicPackageCount) {
+  const readme = await readFile(path.join(root, "README.md"), "utf8");
+  const rows = readme
+    .split("\n")
+    .filter((line) => /^\|\s*\[`@webhook-portal\//.test(line));
+  if (rows.length !== expected) {
+    return [
+      `README.md: the package table lists ${rows.length} @webhook-portal packages but the enforced cohort size is ${expected}`,
+    ];
+  }
+  return [];
+}
+
 export async function checkDocs() {
   const files = trackedMarkdownFiles();
   const failures = [];
@@ -237,9 +289,11 @@ export async function checkDocs() {
     failures.push(...checkLinks(file, text));
     failures.push(...checkNoInventedReferences(file, text));
     failures.push(...checkWorkspacePathReferences(file, text));
+    failures.push(...checkPackageCountClaims(file, text));
   }
   failures.push(...checkNavigation(corpus));
   failures.push(...(await checkCriticalAnchors()));
+  failures.push(...(await checkReadmePackageTable()));
   return failures.sort();
 }
 
