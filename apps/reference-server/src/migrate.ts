@@ -1,9 +1,12 @@
 #!/usr/bin/env node
 // SPDX-License-Identifier: Apache-2.0
 
-import { migrateReferenceServerFromEnv } from "@webhook-portal/reference-server-core";
-
 try {
+  if (!process.env["DATABASE_URL"]?.trim()) {
+    throw new RangeError("DATABASE_URL is required.");
+  }
+  const { migrateReferenceServerFromEnv } =
+    await import("@webhook-portal/reference-server-core");
   const applied = await migrateReferenceServerFromEnv();
   process.stdout.write(
     applied.length === 0
