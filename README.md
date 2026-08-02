@@ -37,6 +37,14 @@ placement, source-of-truth, and release policies.
 - **Standalone.** Package tests, builds, coverage, smoke tests, and release
   checks run without any private repository or hosted service.
 
+## Early evaluation
+
+The [source evaluation guide](docs/evaluation.md) provides a 30-60 minute,
+credential-free path through the end-to-end smoke workflow, contract CLI, and
+optional packed-package consumer check. Start with the organization-wide
+[early tester program](https://github.com/HookShip/.github/blob/main/TESTING.md)
+to choose the correct HookShip track and submit safe feedback.
+
 ## Packages
 
 All 14 packages are Apache-2.0, public-package candidates, and part of the
@@ -226,6 +234,7 @@ release/     coordinated public package manifest
 - [`SECURITY.md`](SECURITY.md)
 - [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md)
 - [`docs/org-context.md`](docs/org-context.md)
+- [`docs/evaluation.md`](docs/evaluation.md)
 - [`docs/release-policy.md`](docs/release-policy.md)
 - [`docs/release-preflight.md`](docs/release-preflight.md)
 - [`docs/compatibility-matrix.md`](docs/compatibility-matrix.md)

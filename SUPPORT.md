@@ -31,3 +31,8 @@ multi-tenancy, or production infrastructure are outside this repository's scope.
 Maintainers may prioritize reports based on reproducibility, impact, project
 scope, and available capacity. Filing an issue creates no response-time or
 resolution commitment.
+
+Early source evaluators should use the
+[toolkit evaluation guide](docs/evaluation.md) and the organization-wide
+[tester program](https://github.com/HookShip/.github/blob/main/TESTING.md)
+before submitting feedback.
