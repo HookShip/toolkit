@@ -48,7 +48,7 @@
     "@webhook-portal/adapter-sdk": "workspace:*",
     "@webhook-portal/contract-core": "workspace:*",
     "@webhook-portal/signing": "workspace:*",
-    "fastify": "^5.10.0",
+    "fastify": "^5.11.2",
     "minio": "^8.0.7",
     "pg": "^8.22.0"
   }
