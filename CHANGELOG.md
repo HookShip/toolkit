@@ -93,6 +93,9 @@ Release status: unreleased.
 
 ### Security
 
+- Refreshed narrow transitive overrides for the latest registry advisories:
+  `fast-uri` `3.1.5`/`4.1.2`, dev-only `brace-expansion` `5.0.9`, `postcss`
+  `8.5.23`, and dev-only `undici` `7.29.0`.
 - Pinned four transitive production dependencies to patched versions via
   narrowly scoped `overrides` in `pnpm-workspace.yaml`, clearing the
   corresponding high-severity Dependabot advisories without changing any
