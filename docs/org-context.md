@@ -1,6 +1,6 @@
 # Organization context
 
-This repository is one of four in the HookShip organization. Work belongs in the
+This repository is one of five in the HookShip organization. Work belongs in the
 repository that owns the affected behavior, and shared artifacts have a single
 canonical source. These are organization-wide policies; this document links them
 rather than restating them, so the organization copies stay authoritative.
@@ -30,6 +30,10 @@ rather than restating them, so the organization copies stay authoritative.
   engineering. It consumes the public foundation and never holds a competing
   public specification. Public documentation here never reproduces private
   platform material.
+- **[`website`](https://github.com/HookShip/website) (public).** The public web
+  presentation and navigation layer. It summarizes and links to toolkit
+  documentation but never replaces this repository as the package source of
+  truth.
 
 ## Consuming toolkit
 

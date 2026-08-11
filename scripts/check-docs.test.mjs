@@ -22,16 +22,18 @@ test("the repository documentation passes every offline check", async () => {
   assert.deepEqual(await checkDocs(), []);
 });
 
-test("only the four real HookShip repositories are accepted", () => {
+test("only the five real HookShip repositories are accepted", () => {
   assert.deepEqual([...verifiedRepos].sort(), [
     ".github",
     "hook-service",
     "platform",
     "toolkit",
+    "website",
   ]);
   assert.equal(verifyHookshipRepo("toolkit"), true);
   assert.equal(verifyHookshipRepo("toolkit.git"), true);
   assert.equal(verifyHookshipRepo("hook-service"), true);
+  assert.equal(verifyHookshipRepo("website"), true);
   assert.equal(verifyHookshipRepo("marketing-site"), false);
 });
 

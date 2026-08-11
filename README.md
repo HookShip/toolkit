@@ -10,7 +10,7 @@ This repository contains only the public toolkit. It has no dependency on a
 hosted service, managed control plane, private package, customer environment, or
 external infrastructure beyond the optional local reference stack.
 
-HookShip spans four repositories with distinct ownership. This toolkit is the
+HookShip spans five repositories with distinct ownership. This toolkit is the
 public foundation; the portable outbound webhook **delivery data plane** lives
 in [`hook-service`](https://github.com/HookShip/hook-service), and the managed
 control plane is private. See [`docs/org-context.md`](docs/org-context.md) for
@@ -43,7 +43,8 @@ The [source evaluation guide](docs/evaluation.md) provides a 30-60 minute,
 credential-free path through the end-to-end smoke workflow, contract CLI, and
 optional packed-package consumer check. Start with the organization-wide
 [early tester program](https://github.com/HookShip/.github/blob/main/TESTING.md)
-to choose the correct HookShip track and submit safe feedback.
+to choose the correct HookShip track and submit safe feedback, or visit the
+[HookShip website](https://hookship.github.io/website/) for the project map.
 
 ## Packages
 
