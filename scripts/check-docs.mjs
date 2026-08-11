@@ -4,7 +4,7 @@
 // Node standard library and git, performs no network access, and enforces:
 //
 // 1. Every relative Markdown link resolves to a file that exists.
-// 2. Every HookShip GitHub reference points at one of the four real HookShip
+// 2. Every HookShip GitHub reference points at one of the five real HookShip
 //    repositories; no other org repository, product URL, contact email, or
 //    availability/SLA claim is invented (the org's pre-release posture).
 // 3. Cross-repo navigation is present: the docs link the organization's
@@ -29,6 +29,7 @@ export const verifiedRepos = new Set([
   "toolkit",
   "hook-service",
   "platform",
+  "website",
 ]);
 
 const orgBlob = "https://github.com/HookShip/.github/blob/main";
@@ -39,6 +40,7 @@ export const requiredNavigation = [
   `${orgBlob}/SOURCE_OF_TRUTH.md`,
   `${orgBlob}/RELEASE_POLICY.md`,
   "https://github.com/HookShip/hook-service",
+  "https://github.com/HookShip/website",
 ];
 
 // A phrase that must appear so hook-service's role is stated, not just linked.
