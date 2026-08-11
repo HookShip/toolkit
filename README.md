@@ -227,6 +227,7 @@ release/     coordinated public package manifest
 
 ## Project documents
 
+- [HookShip website](https://hookship.github.io/website/)
 - [`CONTRIBUTING.md`](CONTRIBUTING.md)
 - [`ROADMAP.md`](ROADMAP.md)
 - [`CHANGELOG.md`](CHANGELOG.md)
