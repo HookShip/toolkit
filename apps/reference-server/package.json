@@ -31,6 +31,6 @@
   "devDependencies": {
     "@webhook-portal/adapter-sdk": "workspace:*",
     "@webhook-portal/signing": "workspace:*",
-    "fastify": "^5.10.0"
+    "fastify": "^5.12.1"
   }
 }
